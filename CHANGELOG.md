@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-06
+
+First public release, extracted from the JSON subsystem of an internal C++
+project.
+
 ### Added
 
+- Strict RFC 8259 scanner that records the line and column of every key and
+  value, detects duplicate keys and bounds the nesting depth.
+- `jsonlens::JsonValue`: ordered value model that keeps `integer` and `number`
+  apart.
+- `jsonlens::parse_json_text` and `jsonlens::to_json_text`: strict reading and
+  byte stable writing.
+- `jsonlens::JsonDocument`: path addressed access with typed getters, defaults,
+  writes and file load/save.
+- Header-only and compiled build modes, CMake package export, CI on Windows and
+  Linux for x86 and x64.
 - `examples/`: three programs that read a configuration, diagnose a file with
   the scanner alone, and build a report in code, built with
   `JSONLENS_BUILD_EXAMPLES=ON` and run by the package jobs of CI.
@@ -48,20 +63,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The static library was exported as `jsonlens::jsonlens_compiled`, which meant
   `find_package` users could not link the `jsonlens::compiled` that an
   `add_subdirectory` user links. The export name is now the same.
-
-## [0.1.0] - 2026-11-06
-
-### Added
-
-- First public release, extracted from the JSON subsystem of an internal C++
-  project.
-- Strict RFC 8259 scanner that records the line and column of every key and
-  value, detects duplicate keys and bounds the nesting depth.
-- `jsonlens::JsonValue`: ordered value model that keeps `integer` and `number`
-  apart.
-- `jsonlens::parse_json_text` and `jsonlens::to_json_text`: strict reading and
-  byte stable writing.
-- `jsonlens::JsonDocument`: path addressed access with typed getters, defaults,
-  writes and file load/save.
-- Header-only and compiled build modes, CMake package export, CI on Windows and
-  Linux for x86 and x64.
