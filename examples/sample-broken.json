@@ -1,0 +1,7 @@
+{
+  "device": {
+    "name": "sensor-1",
+    "port": 115200,
+    "port": 9600
+  }
+}

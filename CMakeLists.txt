@@ -17,6 +17,8 @@ option(JSONLENS_COMPILED
     "Also build a static library that holds the JSON backend translation unit" ON)
 option(JSONLENS_BUILD_TESTS
     "Build the jsonlens test suite" OFF)
+option(JSONLENS_BUILD_EXAMPLES
+    "Build the jsonlens examples" OFF)
 option(JSONLENS_WARNINGS_AS_ERRORS
     "Treat warnings in the jsonlens targets as errors" OFF)
 option(JSONLENS_INSTALL
@@ -94,6 +96,14 @@ endif()
 
 if(JSONLENS_BUILD_TESTS)
     add_subdirectory(tests)
+endif()
+
+# ---------------------------------------------------------------------------
+# Examples
+# ---------------------------------------------------------------------------
+
+if(JSONLENS_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
 
 # ---------------------------------------------------------------------------

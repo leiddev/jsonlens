@@ -1,0 +1,17 @@
+{
+  "device": {
+    "name": "sensor-1",
+    "port": 115200,
+    "retries": 3
+  },
+  "pads": [
+    {
+      "name": "left",
+      "enabled": true
+    },
+    {
+      "name": "right",
+      "enabled": false
+    }
+  ]
+}

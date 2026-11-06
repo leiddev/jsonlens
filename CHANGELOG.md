@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `examples/`: three programs that read a configuration, diagnose a file with
+  the scanner alone, and build a report in code, built with
+  `JSONLENS_BUILD_EXAMPLES=ON` and run by the package jobs of CI.
+
 ### Changed
 
 - Rewrote the header documentation and the README for a library that stands on

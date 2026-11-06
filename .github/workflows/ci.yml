@@ -71,6 +71,7 @@ jobs:
             'include/jsonlens/*.hpp' \
             'include/jsonlens/detail/*.hpp' \
             'src/*.cpp' \
+            'examples/*.cpp' \
             'tests/*.cpp' \
             'tests/consumer/src/*.cpp' \
             'tests/framework/*.hpp')
@@ -170,9 +171,17 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release -DJSONLENS_COMPILED=ON
+            -DCMAKE_BUILD_TYPE=Release -DJSONLENS_COMPILED=ON -DJSONLENS_BUILD_EXAMPLES=ON
           cmake --build build
           cmake --install build --prefix "$RUNNER_TEMP/jsonlens"
+
+      - name: Run the examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./build/examples/jsonlens_example_read_config examples/sample-config.json
+          ./build/examples/jsonlens_example_diagnose examples/sample-broken.json
+          ./build/examples/jsonlens_example_write_report "$RUNNER_TEMP/report.json"
 
       - name: Build a consumer against the installed package
         shell: bash
@@ -193,9 +202,16 @@ jobs:
 
       - name: Install
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DJSONLENS_COMPILED=ON
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DJSONLENS_COMPILED=ON `
+            -DJSONLENS_BUILD_EXAMPLES=ON
           cmake --build build --config Release
           cmake --install build --config Release --prefix "$env:RUNNER_TEMP/jsonlens"
+
+      - name: Run the examples
+        run: |
+          .\build\examples\Release\jsonlens_example_read_config.exe examples\sample-config.json
+          .\build\examples\Release\jsonlens_example_diagnose.exe examples\sample-broken.json
+          .\build\examples\Release\jsonlens_example_write_report.exe "$env:RUNNER_TEMP\report.json"
 
       - name: Build a consumer against the installed package
         run: |

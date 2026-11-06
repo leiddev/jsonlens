@@ -102,6 +102,7 @@ The available options are:
 | --- | --- | --- |
 | `JSONLENS_COMPILED` | `ON` | Build the `jsonlens::compiled` static library. |
 | `JSONLENS_BUILD_TESTS` | `OFF` | Build the self-check test suite. |
+| `JSONLENS_BUILD_EXAMPLES` | `OFF` | Build the programs in `examples/`. |
 | `JSONLENS_WARNINGS_AS_ERRORS` | `OFF` | Make the library's own warnings fatal. |
 | `JSONLENS_INSTALL` | `ON` | Generate install rules and the CMake package files. |
 
@@ -129,6 +130,38 @@ find_package(jsonlens CONFIG REQUIRED)
 target_link_libraries(my_target PRIVATE jsonlens::jsonlens)   # or jsonlens::compiled
 ```
 
+## Examples
+
+Three small programs in `examples/` are built by the library and are the
+quickest way to see it work:
+
+```sh
+cmake -S . -B build -DJSONLENS_BUILD_EXAMPLES=ON
+cmake --build build
+./build/examples/jsonlens_example_read_config examples/sample-config.json
+./build/examples/jsonlens_example_diagnose examples/sample-broken.json
+./build/examples/jsonlens_example_write_report /tmp/report.json
+```
+
+With MSVC the binaries are under `build/examples/Release/`. The first one
+prints:
+
+```
+device sensor-1, port 115200, retries 3
+  pad left: enabled
+  pad right: disabled
+```
+
+`read_config` asks for the fields it needs and for the ones it can default,
+and prints the reason whenever it falls back. `diagnose` uses `json_index.hpp`
+alone, with no backend and no `JSONLENS_IMPLEMENTATION`, to list the duplicated
+keys of `sample-broken.json` and the line and column of `device.port`.
+`write_report` builds a document in code and writes it out; run it twice and
+diff the two files, and there is no diff.
+
+The examples are documentation that the compiler checks: they are built on every
+push in the package jobs of CI, and they are not installed.
+
 ## Reading
 
 ### From text, with a real error message
@@ -139,7 +172,8 @@ std::string error;
 if (!jsonlens::parse_json_text(text, value, error)) {
   // error is something like:
   //   unexpected trailing data at line 3 column 12
-  //   duplicated object key(s): device.port
+  //   duplicated object key(s): port
+  //   the text holds a NUL byte at offset 12, which JSON text cannot
   //   not valid JSON: the JSON backend rejected the document
 }
 ```
