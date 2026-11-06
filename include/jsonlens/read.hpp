@@ -22,7 +22,14 @@
  *     decide whether a document read here is too deep;
  *   - a number written as an integer stays an integer in the model, and a number
  *     written with a fraction or an exponent becomes a double. That distinction
- *     survives only here, because the backend holds both as one double.
+ *     survives only here, because the backend holds both as one double. An
+ *     integer that a double cannot hold exactly, which is every integer at or
+ *     above 2^53, stays a number rather than become a long long that is not the
+ *     number that was written;
+ *   - the text must be valid UTF-8, because it is read as text and written back
+ *     as text, and a byte sequence that is not UTF-8 cannot make that trip;
+ *   - the text must not contain a NUL byte, because the backend reads a C string
+ *     and would see a shorter text than the scanner checked.
  *
  * The result is the JsonValue the rest of the API works with, so a value read
  * here can be inspected, copied and written again. Paths use the syntax of
@@ -34,9 +41,12 @@
 #ifndef JSONLENS_READ_HPP
 #define JSONLENS_READ_HPP
 
+#include <cmath>
 #include <string>
 
 #include "jsonlens/detail/cjson.hpp"
+#include "jsonlens/detail/cjson_owner.hpp"
+#include "jsonlens/detail/decimal.hpp"
 #include "jsonlens/json_index.hpp"
 #include "jsonlens/value.hpp"
 
@@ -48,50 +58,94 @@ namespace detail {
    strict scanner decides whether a number was written as an integer, which is
    the only place that distinction survives: the backend holds both as a double.
    The path is the position of the value, and it is what makes the difference
-   between "1" and "1.0" visible here. */
-inline JsonValue to_json_value(const JsonIndex &index, const std::string &path, const cJSON *item) {
+   between "1" and "1.0" visible here.
+
+   False means the text is valid JSON but does not fit the model, and the only
+   case of that is a number the backend cannot hold: an exponent large enough to
+   overflow a double, which the backend turns into an infinity and would print as
+   null. A silent 1e400 -> null is exactly the kind of loss this library refuses,
+   so it is an error that names the path instead. */
+inline bool to_json_value(const JsonIndex &index, const std::string &path, const cJSON *item,
+                          JsonValue &value, std::string &error) {
   if (item == 0 || cJSON_IsNull(item)) {
-    return JsonValue::make_null();
+    value = JsonValue::make_null();
+    return true;
   }
   if (cJSON_IsString(item)) {
-    return JsonValue::make_string(item->valuestring != 0 ? item->valuestring : std::string());
+    value = JsonValue::make_string(item->valuestring != 0 ? item->valuestring : std::string());
+    return true;
   }
   if (cJSON_IsBool(item)) {
-    return JsonValue::make_bool(cJSON_IsTrue(item) != 0);
+    value = JsonValue::make_bool(cJSON_IsTrue(item) != 0);
+    return true;
   }
   if (cJSON_IsNumber(item)) {
-    if (index.kind(path) == JsonTokenKind::integer) {
-      return JsonValue::make_integer(static_cast<long long>(item->valuedouble));
+    const double number = item->valuedouble;
+    if (!std::isfinite(number)) {
+      error = (path.empty() ? std::string("the document") : "'" + path + "'") +
+              " holds a number that is out of range";
+      return false;
     }
-    return JsonValue::make_number(item->valuedouble);
+    /* Every integer below 2^53 is a double that is exactly the number written,
+       and at 2^53 the doubles are already farther apart than one: 2^53 and
+       9007199254740993 are the same double. The boundary is therefore below
+       2^53, which keeps the claim exact for every integer the model reports,
+       instead of reporting 9007199254740992 for a text that said ...993. */
+    if (index.kind(path) == JsonTokenKind::integer && std::fabs(number) < 9007199254740992.0) {
+      value = JsonValue::make_integer(static_cast<long long>(number));
+    } else {
+      value = JsonValue::make_number(number);
+    }
+    return true;
   }
   if (cJSON_IsArray(item)) {
     JsonValue array = JsonValue::make_array();
     std::size_t position = 0;
     for (const cJSON *child = item->child; child != 0; child = child->next) {
-      array.add(to_json_value(index, append_json_path_index(path, position), child));
+      JsonValue element;
+      if (!to_json_value(index, append_json_path_index(path, position), child, element, error)) {
+        return false;
+      }
+      array.add(element);
       ++position;
     }
-    return array;
+    value = array;
+    return true;
   }
   if (cJSON_IsObject(item)) {
     JsonValue object = JsonValue::make_object();
     for (const cJSON *child = item->child; child != 0; child = child->next) {
       const std::string key = child->string != 0 ? child->string : std::string();
-      object.add(key, to_json_value(index, append_json_path_key(path, key), child));
+      JsonValue member;
+      if (!to_json_value(index, append_json_path_key(path, key), child, member, error)) {
+        return false;
+      }
+      object.add(key, member);
     }
-    return object;
+    value = object;
+    return true;
   }
-  return JsonValue::make_null();
+  value = JsonValue::make_null();
+  return true;
 }
 
 } /* namespace detail */
 
 /* Read one JSON document. Returns false and fills error when the text is not
-   JSON, when a key repeats or when the backend refuses it. The model is left
-   untouched on failure, and any value is accepted as a document, including a
-   number or a string at the top level. */
+   JSON, when a key repeats, when the backend refuses it or when a number is
+   outside the range the backend can hold. The model is left untouched on
+   failure, and any value is accepted as a document, including a number or a
+   string at the top level. */
 inline bool parse_json_text(const std::string &text, JsonValue &value, std::string &error) {
+  /* The backend reads a C string, so a NUL byte would end its view of the text
+     while the scanner still saw what came after it. The two would disagree about
+     where the document ends, so the text is refused before either of them runs. */
+  const std::size_t nul = text.find('\0');
+  if (nul != std::string::npos) {
+    error = "the text holds a NUL byte at offset " + detail::decimal_text(nul) +
+            ", which JSON text cannot";
+    return false;
+  }
   JsonIndex index;
   std::string scan_error;
   if (!JsonIndex::build(text, index, scan_error)) {
@@ -103,13 +157,16 @@ inline bool parse_json_text(const std::string &text, JsonValue &value, std::stri
     error = "duplicated object key(s): " + duplicated;
     return false;
   }
-  cJSON *const root = cJSON_Parse(text.c_str());
-  if (root == 0) {
+  const detail::CJsonTree tree(cJSON_Parse(text.c_str()));
+  if (tree.empty()) {
     error = "not valid JSON: the JSON backend rejected the document";
     return false;
   }
-  value = detail::to_json_value(index, std::string(), root);
-  cJSON_Delete(root);
+  JsonValue parsed;
+  if (!detail::to_json_value(index, std::string(), tree.get(), parsed, error)) {
+    return false;
+  }
+  value = parsed;
   return true;
 }
 

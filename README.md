@@ -155,10 +155,32 @@ text, and the scanner is the stricter of the two.
 | `{"a":1,"a":2}` | A duplicate key is a mistake, not a precedence rule. |
 | `01`, `.5`, `1.`, `+1` | JSON numbers have a fixed grammar. |
 | `"tab	inside"` | Raw control characters must be escaped. |
+| A UTF-8 byte order mark | RFC 8259 does not allow one, and accepting it would mean the text read back is not the text that was written. |
+| `"\xc0\x80"`, `"\xed\xa0\x80"`, a stray `"\x80"` | The text must be valid UTF-8. Overlong forms, surrogates and code points past U+10FFFF are not. |
+| `"\ud800"` with no trailing surrogate | Half a character is not a character, and the three bytes it would become are not UTF-8. |
+| `"a\u0000b"` | A NUL byte inside a string is where a C string ends, so the backend would truncate the value. |
+| `1e400` | It overflows a double, and the backend would print it as `null`. |
 | `[[[…]]]` past `json_nesting_limit()` | A pathological document has a bounded cost. |
 
 The nesting limit is also what keeps the reader's recursion bounded: one read of
 an over-deep document fails instead of running out of stack.
+
+### Numbers
+
+The backend holds every number as a double, so this is where a reader can quietly
+lose something, and where this library stops instead:
+
+- An integer stays an integer in the model as long as a double holds it exactly,
+  which is every integer below 2^53. From 2^53 up it stays a number, because
+  `9007199254740992` and `9007199254740993` are the same double and reporting the
+  first for the second would be a wrong answer with the right type. `get_integer`
+  and `get_integer_or` therefore fail on such a value, or take the default and say
+  so, instead of returning a nearby integer.
+- A number whose exponent overflows a double is an error that names the path,
+  not an infinity that is written back as `null`.
+- A number written with a fraction or an exponent is a number to the model even
+  when its value is whole: `1.0` is not `1`, and `get_integer` refuses it while
+  `get_number` accepts it.
 
 ### Positions
 
@@ -256,6 +278,13 @@ Numbers are printed by the backend, so their spelling is part of the pinned
 behaviour: `1.0` prints as `1` and `-0.0` prints as `-0`, which is documented in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) along with the rest of the
 backend pin.
+
+Writing refuses what it cannot represent instead of truncating it: a string or a
+key that holds a NUL byte fails with a message that names the path, because the
+backend writes a C string and would stop at the byte. A string is otherwise
+written as it is; the read path is what guarantees that everything
+`parse_json_text()` produced is valid UTF-8, and a value built by hand is held to
+the same contract.
 
 ## Files
 

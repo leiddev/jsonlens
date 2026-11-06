@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrote the header documentation and the README for a library that stands on
   its own: no references to the internal project the code was extracted from.
 
+### Fixed
+
+- A failed read no longer leaks the backend tree when the conversion into the
+  model throws; the tree is owned by a class with a destructor.
+- An integer literal at or above 2^53 is reported as a number instead of being
+  cast to a `long long` that is not the number that was written, which was also
+  undefined behaviour for a literal too large for the type.
+- A number whose exponent overflows a double is an error that names the path,
+  not an infinity that is written back as `null`.
+- A NUL byte in the text is rejected with its offset before the backend can read
+  a shorter text than the scanner checked, and a `\u0000` escape in a string is
+  rejected for the same reason.
+- The text must be valid UTF-8, and a leading byte order mark, an overlong form,
+  a surrogate and a code point past U+10FFFF are errors. A `\u` escape that is
+  half of a surrogate pair is an error instead of three bytes that are not UTF-8.
+- A key that holds a NUL byte is refused when writing, as a string already was.
+
 ## [0.1.0] - 2026-11-06
 
 ### Added

@@ -15,8 +15,11 @@
  * authority on what a key holds. What this scanner does decide is whether the
  * text follows JSON syntax, and there it is as strict as the reference
  * implementation: it rejects trailing data, raw control characters inside a
- * string and numbers such as 01 or .5, all of which a lenient parser accepts. A
- * document therefore has to satisfy both this scanner and the backend.
+ * string and numbers such as 01 or .5, all of which a lenient parser accepts. It
+ * also rejects what is not JSON text at all: an unexpected byte order mark, a
+ * byte sequence that is not valid UTF-8, a \u escape that is half of a surrogate
+ * pair and a \u0000 escape, which no C string can carry. A document therefore
+ * has to satisfy both this scanner and the backend.
  *
  * Paths use the syntax the rest of the library uses: dot separated keys with
  * array subscripts in brackets, for example "device.pads[0].name". A key that
@@ -330,6 +333,14 @@ public:
 
   /* True when the whole text is one JSON value. */
   bool run() {
+    /* A byte order mark is not part of the text: it is what an editor put in
+       front of it. RFC 8259 forbids adding one, and accepting it here would mean
+       a document that reads back differently from the one that was written. */
+    if (text_.size() >= 3 && static_cast<unsigned char>(text_[0]) == 0xefU &&
+        static_cast<unsigned char>(text_[1]) == 0xbbU &&
+        static_cast<unsigned char>(text_[2]) == 0xbfU) {
+      return fail("an unexpected UTF-8 byte order mark");
+    }
     if (!parse_value(std::string(), 0, unknown_json_position())) {
       return false;
     }
@@ -396,9 +407,8 @@ private:
     return static_cast<unsigned long>(character - 'A' + 10);
   }
 
-  /* Append a code point as UTF-8. A lone surrogate is encoded as a three byte
-     sequence so that two spellings of the same key stay equal, which is what
-     the backend does as well. */
+  /* Append one code point as UTF-8. The caller has already rejected a lone
+     surrogate, so every code point here is a character. */
   static void append_utf8(std::string &out, unsigned long code) {
     if (code < 0x80UL) {
       out.push_back(static_cast<char>(code));
@@ -430,6 +440,89 @@ private:
     return true;
   }
 
+  /* One code point from a \u escape, which may be a surrogate pair. A lone
+     surrogate is half a character and the model has nowhere to put it, so it is
+     an error here rather than three bytes that are not UTF-8. */
+  bool read_code_point(unsigned long &code) {
+    if (code == 0UL) {
+      return fail("a \\u0000 escape, which is a NUL byte this model cannot carry");
+    }
+    if (code >= 0xdc00UL && code <= 0xdfffUL) {
+      return fail("a trailing surrogate escape without a leading one");
+    }
+    if (code < 0xd800UL || code > 0xdbffUL) {
+      return true;
+    }
+    if (peek() != '\\') {
+      return fail("a leading surrogate escape without a trailing one");
+    }
+    advance();
+    if (peek() != 'u') {
+      return fail("a leading surrogate escape without a trailing one");
+    }
+    advance();
+    unsigned long trailing = 0;
+    if (!read_hex4(trailing)) {
+      return false;
+    }
+    if (trailing < 0xdc00UL || trailing > 0xdfffUL) {
+      return fail("a leading surrogate escape without a trailing one");
+    }
+    code = 0x10000UL + ((code - 0xd800UL) << 10) + (trailing - 0xdc00UL);
+    return true;
+  }
+
+  /* A byte above 0x7f starts a sequence in the text itself. It is checked here
+     instead of trusted, because the model promises text that is valid UTF-8 from
+     the file to the writer: an overlong form, a surrogate or a code point above
+     U+10FFFF is what makes two different byte sequences name one character. */
+  bool append_raw_utf8(std::string &out) {
+    const std::size_t start = offset_;
+    const unsigned char lead = static_cast<unsigned char>(text_[offset_]);
+    std::size_t length = 0;
+    unsigned char first_min = 0x80U;
+    unsigned char first_max = 0xbfU;
+    if (lead >= 0xc2U && lead <= 0xdfU) {
+      length = 2;
+    } else if (lead == 0xe0U) {
+      length = 3;
+      first_min = 0xa0U;
+    } else if ((lead >= 0xe1U && lead <= 0xecU) || (lead >= 0xeeU && lead <= 0xefU)) {
+      length = 3;
+    } else if (lead == 0xedU) {
+      length = 3;
+      first_max = 0x9fU;
+    } else if (lead == 0xf0U) {
+      length = 4;
+      first_min = 0x90U;
+    } else if (lead >= 0xf1U && lead <= 0xf3U) {
+      length = 4;
+    } else if (lead == 0xf4U) {
+      length = 4;
+      first_max = 0x8fU;
+    } else {
+      return fail("a byte that starts no UTF-8 sequence in a string");
+    }
+    if (text_.size() - offset_ < length) {
+      return fail("an incomplete UTF-8 sequence in a string");
+    }
+    const unsigned char first = static_cast<unsigned char>(text_[offset_ + 1]);
+    if (first < first_min || first > first_max) {
+      return fail("an invalid UTF-8 sequence in a string");
+    }
+    for (std::size_t index = 2; index < length; ++index) {
+      const unsigned char other = static_cast<unsigned char>(text_[offset_ + index]);
+      if (other < 0x80U || other > 0xbfU) {
+        return fail("an invalid UTF-8 sequence in a string");
+      }
+    }
+    for (std::size_t index = 0; index < length; ++index) {
+      out.push_back(text_[start + index]);
+      advance();
+    }
+    return true;
+  }
+
   bool parse_string(std::string &out) {
     if (peek() != '"') {
       return fail("expected a string");
@@ -444,6 +537,12 @@ private:
       }
       if (static_cast<unsigned char>(character) < 0x20U) {
         return fail("a raw control character in a string");
+      }
+      if (static_cast<unsigned char>(character) >= 0x80U) {
+        if (!append_raw_utf8(out)) {
+          return false;
+        }
+        continue;
       }
       if (character != '\\') {
         out.push_back(character);
@@ -461,31 +560,8 @@ private:
         if (!read_hex4(code)) {
           return false;
         }
-        if (code >= 0xd800UL && code <= 0xdbffUL && peek() == '\\') {
-          /* A leading surrogate is only combined with a trailing one; on its
-             own it stays a code unit of its own, as in the reference. */
-          const std::size_t saved_offset = offset_;
-          const std::size_t saved_line = line_;
-          const std::size_t saved_column = column_;
-          advance();
-          if (peek() == 'u') {
-            advance();
-            unsigned long trailing = 0;
-            if (!read_hex4(trailing)) {
-              return false;
-            }
-            if (trailing >= 0xdc00UL && trailing <= 0xdfffUL) {
-              code = 0x10000UL + ((code - 0xd800UL) << 10) + (trailing - 0xdc00UL);
-            } else {
-              offset_ = saved_offset;
-              line_ = saved_line;
-              column_ = saved_column;
-            }
-          } else {
-            offset_ = saved_offset;
-            line_ = saved_line;
-            column_ = saved_column;
-          }
+        if (!read_code_point(code)) {
+          return false;
         }
         append_utf8(out, code);
         continue;

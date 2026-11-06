@@ -31,52 +31,13 @@
 #include <string>
 
 #include "jsonlens/detail/cjson.hpp"
+#include "jsonlens/detail/cjson_owner.hpp"
 #include "jsonlens/json_index.hpp"
 #include "jsonlens/value.hpp"
 
 namespace jsonlens {
 
 namespace detail {
-
-/* Owns one node of the backend tree. */
-class CJsonTree {
-public:
-  explicit CJsonTree(cJSON *root) : root_(root) {}
-  ~CJsonTree() { cJSON_Delete(root_); }
-
-  cJSON *get() const { return root_; }
-  bool empty() const { return root_ == 0; }
-
-  /* Gives the node away. The caller owns it from here on. */
-  cJSON *release() {
-    cJSON *const root = root_;
-    root_ = 0;
-    return root;
-  }
-
-private:
-  CJsonTree(const CJsonTree &other) = delete;
-  CJsonTree &operator=(const CJsonTree &other) = delete;
-
-  cJSON *root_;
-};
-
-/* Owns the text the backend printed, which the backend frees with its own
-   function and not with the operator delete of this program. */
-class CJsonText {
-public:
-  explicit CJsonText(char *text) : text_(text) {}
-  ~CJsonText() { cJSON_free(text_); }
-
-  const char *get() const { return text_; }
-  bool empty() const { return text_ == 0; }
-
-private:
-  CJsonText(const CJsonText &other) = delete;
-  CJsonText &operator=(const CJsonText &other) = delete;
-
-  char *text_;
-};
 
 /* Copy one value of the model into a fresh node of the backend. Returns the null
    pointer and fills error when the value cannot be written, and the path says
@@ -135,6 +96,13 @@ inline cJSON *to_cjson(const JsonValue &value, const std::string &path, std::str
     }
     const std::vector<std::string> keys = value.keys();
     for (std::size_t index = 0; index < keys.size(); ++index) {
+      /* A key is a C string to the backend just as a value is, and it is copied
+         before the member is written, so a NUL here would truncate the key and
+         not the member. */
+      if (keys[index].find('\0') != std::string::npos) {
+        error = "the key at " + where + " holds a NUL byte, which the backend cannot write";
+        return 0;
+      }
       const JsonValue *const item = value.member(keys[index]);
       cJSON *const node = item == 0
                               ? cJSON_CreateNull()

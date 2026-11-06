@@ -48,7 +48,8 @@ set(jsonlens_public_headers
     detail/byte_less.hpp
     detail/decimal.hpp
     detail/text_file.hpp
-    detail/cjson.hpp)
+    detail/cjson.hpp
+    detail/cjson_owner.hpp)
 
 set(jsonlens_header_check_dir ${CMAKE_CURRENT_BINARY_DIR}/header_checks)
 file(MAKE_DIRECTORY ${jsonlens_header_check_dir})

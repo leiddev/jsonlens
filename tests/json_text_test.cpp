@@ -319,3 +319,187 @@ SELFCHECK_TEST(a_document_survives_a_round_trip_through_text) {
       jsonlens::parse_json_text(jsonlens::to_json_text(model, true), formatted, error), error);
   SELFCHECK_CHECK_STREQ(compact, jsonlens::to_json_text(formatted, false));
 }
+
+/* The backend reads a C string, so a NUL byte would end its view of the text
+   while the scanner still saw what came after it. The two would then disagree
+   about where the document ends, and the shorter reading would win silently. */
+SELFCHECK_TEST(a_text_with_a_nul_byte_is_rejected) {
+  std::string text("{\"a\":1}");
+  text.push_back('\0');
+  text += "{\"b\":2}";
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::parse_json_text(text, value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "NUL");
+  SELFCHECK_CHECK_CONTAINS(error, "offset 7");
+  SELFCHECK_CHECK(value.is_null());
+
+  /* Inside a string is the same thing: the text, not the escape, is what holds
+     the byte. */
+  std::string inside("\"a");
+  inside.push_back('\0');
+  inside += "b\"";
+  SELFCHECK_CHECK(!jsonlens::parse_json_text(inside, value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "NUL");
+}
+
+/* RFC 8259 forbids adding a byte order mark, and accepting one would mean that
+   the text read back is not the text that was written. */
+SELFCHECK_TEST(a_byte_order_mark_is_rejected) {
+  const std::string text = std::string("\xef\xbb\xbf") + "{\"a\":1}";
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::parse_json_text(text, value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "byte order mark");
+  SELFCHECK_CHECK_CONTAINS(error, "line 1 column 1");
+}
+
+/* Every sequence here is what a tool that guessed at a decoder in a different
+   language would accept: an overlong form, a stray continuation byte, a
+   truncated sequence and a code point that is not a character. */
+SELFCHECK_TEST(a_byte_sequence_that_is_not_utf8_is_rejected) {
+  const char *const cases[] = {
+      "\"\xc0\x80\"",          /* an overlong NUL, two bytes for one character */
+      "\"\x80\"",              /* a continuation byte with nothing to continue */
+      "\"\xe2\x82\"",          /* a three byte sequence cut short at the quote */
+      "\"\xed\xa0\x80\"",      /* a surrogate, which is not a character */
+      "\"\xf4\x90\x80\x80\"",  /* U+110000, one past the last code point */
+      "\"\xf5\x80\x80\x80\""}; /* a lead byte that no sequence starts with */
+  for (const char *const text : cases) {
+    jsonlens::JsonValue value;
+    std::string error;
+    SELFCHECK_CHECK_MSG(!jsonlens::parse_json_text(text, value, error), std::string(text));
+    SELFCHECK_CHECK_CONTAINS(error, "UTF-8");
+    SELFCHECK_CHECK(value.is_null());
+  }
+  /* The same bytes are fine outside a string, where they are just a byte that
+     starts no value. */
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::parse_json_text("\xc3\xa9", value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "not valid JSON");
+}
+
+SELFCHECK_TEST(valid_utf8_survives_the_round_trip) {
+  const std::string characters = "caf\xc3\xa9 \xe2\x82\xac \xf0\x9f\x98\x80";
+  const std::string text = "{\"name\":\"" + characters + "\"}";
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text(text, value, error), error);
+  const jsonlens::JsonValue *const name = value.member("name");
+  SELFCHECK_CHECK(name != 0);
+  std::string round_tripped;
+  SELFCHECK_CHECK(name != 0 && name->as_string(round_tripped));
+  SELFCHECK_CHECK_STREQ(characters, round_tripped);
+  SELFCHECK_CHECK_STREQ(text, jsonlens::to_json_text(value, false));
+}
+
+/* A surrogate is half of a character, and half of a character is not text. The
+   escape is written as a pair or it is an error; it is never three bytes that no
+   UTF-8 decoder accepts. */
+SELFCHECK_TEST(unpaired_surrogate_escapes_are_rejected) {
+  const char *const cases[] = {
+      "\"\\ud800\"",        /* a leading surrogate with nothing after it */
+      "\"\\udc00\"",        /* a trailing surrogate with nothing before it */
+      "\"\\ud800\\u0041\"", /* a leading surrogate followed by a character */
+      "\"\\ud800\\ud800\"" /* two leading surrogates are still half a pair */};
+  for (const char *const text : cases) {
+    jsonlens::JsonValue value;
+    std::string error;
+    SELFCHECK_CHECK_MSG(!jsonlens::parse_json_text(text, value, error), std::string(text));
+    SELFCHECK_CHECK_CONTAINS(error, "surrogate");
+  }
+}
+
+SELFCHECK_TEST(a_pair_of_surrogate_escapes_is_one_character) {
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("\"\\ud83d\\ude00\"", value, error), error);
+  std::string text;
+  SELFCHECK_CHECK(value.as_string(text));
+  SELFCHECK_CHECK_STREQ(std::string("\xf0\x9f\x98\x80"), text);
+  /* The escaped form and the literal one name the same character, so the
+     document that comes back is written the literal way. */
+  SELFCHECK_CHECK_STREQ(std::string("\"\xf0\x9f\x98\x80\""), jsonlens::to_json_text(value, false));
+}
+
+/* A \u0000 escape is a NUL byte in the middle of a string, which no C string can
+   carry: the backend would truncate the value where the byte sits, and the text
+   would read back shorter than it was written. */
+SELFCHECK_TEST(a_nul_escape_is_rejected) {
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::parse_json_text("\"a\\u0000b\"", value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "NUL");
+  SELFCHECK_CHECK_CONTAINS(error, "\\u0000");
+}
+
+/* Every integer below 2^53 is exactly what a double holds, and at 2^53 the
+   doubles are farther apart than one: 9007199254740992 and 9007199254740993 are
+   the same double. The model stops calling a number an integer at that point,
+   because a long long there would report a value the text never carried. */
+SELFCHECK_TEST(an_integer_above_the_exact_range_stays_a_number) {
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("9007199254740991", value, error), error);
+  SELFCHECK_CHECK(value.is_integer());
+  long long integer = 0;
+  SELFCHECK_CHECK(value.as_integer(integer));
+  SELFCHECK_CHECK(integer == 9007199254740991LL);
+
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("9007199254740992", value, error), error);
+  SELFCHECK_CHECK(!value.is_integer());
+  SELFCHECK_CHECK(value.is_number());
+
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("9007199254740993", value, error), error);
+  SELFCHECK_CHECK(!value.is_integer());
+  SELFCHECK_CHECK(value.is_number());
+  double number = 0.0;
+  SELFCHECK_CHECK(value.as_number(number));
+  SELFCHECK_CHECK(number == 9007199254740992.0);
+  /* It is written as the double it became, and the reader says so rather than
+     claiming a precision it does not have. */
+  SELFCHECK_CHECK_STREQ(std::string("9007199254740992"), jsonlens::to_json_text(value, false));
+
+  /* A twenty digit integer is further past the limit, and it is not an integer
+     of the model either. */
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("{\"id\":123456789012345678901}", value, error),
+                      error);
+  const jsonlens::JsonValue *const id = value.member("id");
+  SELFCHECK_CHECK(id != 0 && !id->is_integer());
+  SELFCHECK_CHECK(id != 0 && id->is_number());
+}
+
+/* An exponent large enough to overflow a double becomes an infinity in the
+   backend, and the backend prints an infinity as null. Losing 1e400 that way is
+   the kind of silent loss this library exists to refuse. */
+SELFCHECK_TEST(a_number_that_does_not_fit_the_backend_is_an_error) {
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::parse_json_text("{\"scale\":1e400}", value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "scale");
+  SELFCHECK_CHECK_CONTAINS(error, "out of range");
+  SELFCHECK_CHECK(value.is_null());
+
+  SELFCHECK_CHECK(!jsonlens::parse_json_text("1e400", value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "the document");
+  SELFCHECK_CHECK_CONTAINS(error, "out of range");
+
+  /* The negative side is the same number of the backend. */
+  SELFCHECK_CHECK(!jsonlens::parse_json_text("[-1e400]", value, error));
+  SELFCHECK_CHECK_CONTAINS(error, "[0]");
+}
+
+/* A key is a C string to the backend just as a value is, and it is copied before
+   the member is written, so a NUL in a key would truncate the key and not the
+   member. */
+SELFCHECK_TEST(writing_refuses_a_key_that_holds_a_NUL_byte) {
+  const std::string key("a\0b", 3);
+  jsonlens::JsonValue value = jsonlens::JsonValue::make_object();
+  value.add(key, jsonlens::JsonValue::make_integer(1));
+  std::string text;
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::to_json_text(value, text, error, false));
+  SELFCHECK_CHECK_CONTAINS(error, "NUL");
+  SELFCHECK_CHECK(text.empty());
+}
