@@ -8,8 +8,8 @@
  * it is copied, and it is destroyed with the scope that holds it, so there is no
  * tree to free, no reference to keep alive and no borrowed pointer to misuse.
  *
- * It is the answer to the question "how does an element read its parameters and
- * write its report without meeting the C API of the backend?":
+ * It is the answer to the question "how does a program read a configuration or a
+ * report without meeting the C API of the backend?":
  *
  *   JsonDocument document;
  *   std::string error;
@@ -19,18 +19,18 @@
  *   document.set("device.name", JsonValue::make_string("uart0"), error);
  *   document.save_file("report.json", error);
  *
- * Everything is addressed the same way the diagnostics of the library are:
- * "device.port", "pads[2].name". A leading '/' is ignored and means nothing
- * more, which is what makes the legacy style "/device/port" a rewrite and not a
- * second syntax. An empty path is the document itself, and a key inside a path
- * may not be empty, so a path is always a walk that can be taken.
+ * Everything is addressed with the same path syntax the rest of the library
+ * uses: "device.port", "pads[2].name". A leading '/' is ignored and means
+ * nothing more, which is what makes the familiar "/device/port" style a rewrite
+ * and not a second syntax. An empty path is the document itself, and a key
+ * inside a path may not be empty, so a path is always a walk that can be taken.
  *
  * Reading is strict by default: a path that is not there, or a value of the
  * wrong kind, is a failure with a message that names the path and both kinds,
- * because silence is how the legacy library turned a typo into a wrong
- * configuration that nobody noticed. A parameter that has a default reads with
- * one anyway: the call takes the fallback, returns it instead of failing, and
- * keeps the reason in last_error(), so the caller can report that it fell back.
+ * because silence is how a typo turns into a wrong configuration that nobody
+ * notices. A parameter that has a default reads with one anyway: the call takes
+ * the fallback, returns it instead of failing, and keeps the reason in
+ * last_error(), so the caller can report that it fell back.
  *
  * Writing creates what is missing and refuses the rest. A key that is not there
  * is added, a key that is there keeps its place and takes the new value, and a
@@ -41,9 +41,9 @@
  * itself and the kind it needed there, and nothing is overwritten.
  *
  * A write copies the containers it walks, so a deep path in a large document
- * costs a copy per level. The objects this library carries are small, and the
- * alternative is a mutable view, which is a handle to keep alive and a source of
- * dangling references; that is exactly what this class does not want to be.
+ * costs a copy per level. The documents this library is used for are small, and
+ * the alternative is a mutable view, which is a handle to keep alive and a source
+ * of dangling references; that is exactly what this class does not want to be.
  */
 #ifndef JSONLENS_DOCUMENT_HPP
 #define JSONLENS_DOCUMENT_HPP
@@ -179,8 +179,8 @@ public:
   /* The same reads for a parameter that has a default: a value that is missing
      or of another kind gives the fallback, and last_error() still names the
      reason. The separate name keeps a call that wants a value in a variable from
-     quietly becoming a call that returns a default, which is what happened when
-     the two shapes shared get_int in the element config. */
+     quietly becoming a call that returns a default, which is what happens when
+     both shapes share one name. */
   bool get_bool_or(const std::string &path, bool fallback) const {
     bool value = false;
     std::string error;
@@ -224,8 +224,8 @@ public:
   }
 
   /* The same array as documents, so each item reads its fields by path the way a
-     document does. This is the shape of a table of device entries, where every
-     item is an object with optional fields of its own. */
+     document does. This is the shape of a table of records, where every item is
+     an object with optional fields of its own. */
   bool get_documents(const std::string &path, std::vector<JsonDocument> &items,
                      std::string &error) const;
 

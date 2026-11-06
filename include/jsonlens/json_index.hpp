@@ -5,10 +5,10 @@
  * SPDX-License-Identifier: MIT
  *
  * The JSON backend answers "what does this key hold", but it keeps no source
- * positions, and the loader has to report a line and a column with every
- * finding. This scanner supplies exactly that missing part: it walks the text
- * once, records where every key and every value starts, and notices duplicated
- * object keys, of which a JSON parser silently drops all but the last.
+ * positions, and a caller that reports a mistake needs a line and a column. This
+ * scanner supplies exactly that missing part: it walks the text once, records
+ * where every key and every value starts, and notices duplicated object keys, of
+ * which a JSON parser silently drops all but the last.
  *
  * It is deliberately not a JSON parser. It never converts a number, never
  * builds a document and never hands out a value; the backend stays the only
@@ -18,13 +18,13 @@
  * string and numbers such as 01 or .5, all of which a lenient parser accepts. A
  * document therefore has to satisfy both this scanner and the backend.
  *
- * Paths use the syntax the diagnostics use: dot separated keys with array
- * subscripts in brackets, for example "element.Producer.src_pad_config[0]". A
- * key that contains a dot, a bracket or a backslash is escaped with a
- * backslash, see escape_json_path_key().
+ * Paths use the syntax the rest of the library uses: dot separated keys with
+ * array subscripts in brackets, for example "device.pads[0].name". A key that
+ * contains a dot, a bracket or a backslash is escaped with a backslash, see
+ * escape_json_path_key().
  *
- * This header needs no JSON library, so it can be used by a tool that only has
- * to point at a mistake in a file.
+ * This header needs no JSON library, so a tool that only has to point at a
+ * mistake in a file can use it on its own.
  */
 #ifndef JSONLENS_JSON_INDEX_HPP
 #define JSONLENS_JSON_INDEX_HPP
@@ -46,7 +46,7 @@ namespace jsonlens {
    limit is what one read of a pathological document may cost on the stack. The
    backend would accept CJSON_NESTING_LIMIT, which is 1000, so this is the
    stricter of the two and a document this scanner accepted is never refused by
-   the backend for being too deep. A configuration nests a handful of levels. */
+   the backend for being too deep. Real documents nest a handful of levels. */
 inline std::size_t json_nesting_limit() {
   return 64;
 }
@@ -158,7 +158,7 @@ struct JsonPathStep {
 };
 
 /* Split "net.port" or "pads[2].name" into steps. A leading '/' is ignored, so
-   the legacy absolute style "/log_enable" keeps working. An empty path yields
+   the familiar absolute style "/log_enable" also works. An empty path yields
    no step at all and means "the value itself". A backslash escapes the next
    character, which allows a key that contains a dot.
  *
@@ -277,9 +277,9 @@ public:
   const std::vector<std::string> &duplicate_keys() const { return duplicates_; }
 
   /* The same names as one sorted list, separated by ", ", or an empty string
-     when no key repeats. This is the text a finding carries, so it is built in
-     one place: the loader reports it and the reader refuses the document with
-     it. */
+     when no key repeats. This is the text an error message carries, so it is
+     built in one place: the document reports it and the reader refuses the text
+     with it. */
   std::string duplicated_key_list() const {
     std::vector<std::string> names(duplicates_);
     std::sort(names.begin(), names.end(), ByteLess());

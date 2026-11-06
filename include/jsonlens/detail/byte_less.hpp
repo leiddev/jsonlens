@@ -7,9 +7,9 @@
  * std::string compares its characters as plain char, which is signed on MSVC
  * and unsigned on Linux. A byte above 0x7f therefore sorts before the ASCII
  * range on Windows and after it elsewhere, so two platforms would report the
- * same findings in a different order. The loader promises a stable order, and
- * the reference validator sorts with the code points of the decoded text, which
- * is what comparing unsigned bytes reproduces for ASCII keys.
+ * same duplicate keys in a different order. This library promises a stable
+ * order, and the reference validator sorts with the code points of the decoded
+ * text, which is what comparing unsigned bytes reproduces for ASCII keys.
  */
 #ifndef JSONLENS_DETAIL_BYTE_LESS_HPP
 #define JSONLENS_DETAIL_BYTE_LESS_HPP

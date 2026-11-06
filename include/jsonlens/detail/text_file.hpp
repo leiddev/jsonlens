@@ -1,13 +1,13 @@
 /*
- * io.hpp - Read and write a whole text file.
+ * text_file.hpp - Read and write a whole text file.
  *
  * Copyright (c) 2026 BTXC Embedded Development Team
  * SPDX-License-Identifier: MIT
  *
- * A pipeline is configured from a file, and an element that reports JSON writes
- * one, so the library needs exactly two file operations: read all of a file and
- * replace all of a file. Nothing else about files belongs here - no directory
- * handling, no paths, no append, no partial reads.
+ * A program that reads a configuration from a file, and writes JSON back to one,
+ * needs exactly two file operations: read all of a file and replace all of a
+ * file. Nothing else about files belongs here - no directory handling, no paths,
+ * no append, no partial reads.
  *
  * The two functions treat a file as bytes and never translate line endings, so
  * a document written on one platform is read back unchanged on another.

@@ -1,10 +1,10 @@
 /*
- * io_test.cpp - Reading and writing a file, and a document through a file.
+ * text_file_test.cpp - Reading and writing a file, and a document through a file.
  *
  * Copyright (c) 2026 BTXC Embedded Development Team
  * SPDX-License-Identifier: MIT
  *
- * A pipeline is configured from a file and an element may report to one, so
+ * A program reads its configuration from a file and writes its report to one, so
  * these tests pin the two file operations the library offers and the two things
  * a caller depends on them for: a text read back is the text that was written,
  * byte for byte, and a file that is written again holds the new document and not

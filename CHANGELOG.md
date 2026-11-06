@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the header documentation and the README for a library that stands on
+  its own: no references to the internal project the code was extracted from.
+
 ## [0.1.0] - 2026-11-06
 
 ### Added
 
-- First public release, extracted from the JSON subsystem of the `pipeforge`
+- First public release, extracted from the JSON subsystem of an internal C++
   project.
 - Strict RFC 8259 scanner that records the line and column of every key and
   value, detects duplicate keys and bounds the nesting depth.

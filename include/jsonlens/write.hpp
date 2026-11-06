@@ -5,16 +5,16 @@
  * SPDX-License-Identifier: MIT
  *
  * to_json_text() is the way out for a program that builds a document with the
- * C++ API and has to hand JSON to something else - a socket, a file, a log. It
- * closes the gap that the model alone leaves open: config/value.hpp can build
- * and inspect a document without the backend, but only the backend can write it.
+ * API and has to hand JSON to something else - a socket, a file, a log. It
+ * closes the gap that the model alone leaves open: value.hpp can build and
+ * inspect a document without the backend, but only the backend can write it.
  *
  * The text is the backend's text. The document is copied into a backend tree and
- * printed by the pinned backend, so what an element sends and what the
- * configuration writes are the same dialect, checked by the same golden tests:
- * insertion order, TAB indentation when formatted, one line for an array, the
- * backend's number format, and a null for a value that is not a number. A
- * second printer in this library would be a second dialect, so there is none.
+ * printed by the pinned backend, so every producer that links this library writes
+ * the same dialect, checked by the same golden tests: insertion order, TAB
+ * indentation when formatted, one line for an array, the backend's number format,
+ * and a null for a value that is not a number. A second printer in this library
+ * would be a second dialect, so there is none.
  *
  * What the model can hold and JSON cannot is refused rather than lost: a string
  * that carries a NUL byte cannot be written, because the backend, like JSON
@@ -153,8 +153,9 @@ inline cJSON *to_cjson(const JsonValue &value, const std::string &path, std::str
 } /* namespace detail */
 
 /* Write a document as JSON. Returns false and fills error when the value cannot
-   be written, and then leaves text untouched. formatted is the TAB indented
-   layout of the backend, the same text the configuration is written with. */
+   be written, and then leaves text untouched. formatted selects the TAB indented
+   layout of the backend; both layouts are byte stable and covered by the golden
+   tests. */
 inline bool to_json_text(const JsonValue &value, std::string &text, std::string &error,
                          bool formatted = true) {
   detail::CJsonTree tree(detail::to_cjson(value, std::string(), error));

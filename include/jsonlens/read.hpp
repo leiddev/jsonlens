@@ -5,30 +5,29 @@
  * SPDX-License-Identifier: MIT
  *
  * parse_json_text() is the way in for a program that is handed JSON - a
- * configuration, a message, a report - and wants to look at it with the C++ API
- * instead of the C API of the backend. It is the same read that the configuration
- * loader performs, on the same two authorities: the strict scanner of
- * json_index.hpp decides whether the text is JSON and where every token is, and
- * the pinned backend decides what every node holds.
+ * configuration, a message, a report - and wants to look at it through this
+ * library instead of through the C API of the backend. It reads with two
+ * authorities: the strict scanner of json_index.hpp decides whether the text is
+ * JSON and where every token sits, and the pinned backend decides what every
+ * node holds.
  *
  * The read is stricter than a JSON parser, because a lenient parser is how a
  * typo becomes a silent default:
  *
  *   - the whole text must be one JSON value, so trailing data is an error;
- *   - an object key that is written more than once is an error, where a parser
- *     drops all but the last;
+ *   - an object key written twice is an error, where a parser drops all but the
+ *     last;
  *   - the text must stay within json_nesting_limit() levels, which is stricter
  *     than the depth the backend itself accepts, so that the backend never has to
- *     decide whether a document this library read is too deep;
+ *     decide whether a document read here is too deep;
  *   - a number written as an integer stays an integer in the model, and a number
- *     written with a fraction or an exponent becomes a double, which is the only
- *     place that distinction survives, because the backend holds both as a
- *     double.
+ *     written with a fraction or an exponent becomes a double. That distinction
+ *     survives only here, because the backend holds both as one double.
  *
- * The model is the same JsonValue that a configuration element hands out, so a
- * value read here can be compared, copied and written with the rest of the C++
- * API. An empty path means the whole document; paths use the syntax of the
- * diagnostics, "device.port" or "pads[2].name".
+ * The result is the JsonValue the rest of the API works with, so a value read
+ * here can be inspected, copied and written again. Paths use the syntax of
+ * json_index.hpp, "device.port" or "pads[2].name", and an empty path means the
+ * whole document.
  *
  * This header exposes the JSON backend.
  */

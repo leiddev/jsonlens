@@ -1,17 +1,20 @@
 /*
- * value.hpp - One element specific parameter, as a value of a small tree.
+ * value.hpp - A JSON value: the ordered tree the other headers work with.
  *
  * Copyright (c) 2026 BTXC Embedded Development Team
  * SPDX-License-Identifier: MIT
  *
- * The schema cannot describe the parameters an element invents for itself, so
- * the configuration model keeps them as they were written. They are kept as a
- * tree of plain values instead of as a parsed document, which keeps the model
- * free of the JSON backend: a unit test builds parameters by hand, and
- * ElementConfig answers without a parser.
+ * JsonValue is the model that read.hpp fills in and write.hpp walks. It does
+ * not depend on any parser: a unit test builds values by hand, and a caller can
+ * assemble one without touching the backend.
  *
- * A kind tells an integer from a number. Only the strict scanner of the loader
- * can: a backend reads both as one double, so 3 and 3.0 look alike afterwards.
+ * Two properties make it more than a wrapper around a map:
+ *
+ *   - object members keep insertion order, so a caller sees the document as it
+ *     was written and a round trip does not reshuffle it;
+ *   - a kind tells an integer from a number. Only the strict scanner of
+ *     json_index.hpp can, because a backend reads both as one double and 3 and
+ *     3.0 then look alike.
  */
 #ifndef JSONLENS_VALUE_HPP
 #define JSONLENS_VALUE_HPP
@@ -23,7 +26,7 @@
 
 namespace jsonlens {
 
-/* Kind of one value of a parameter. */
+/* Kind of one JSON value. */
 enum class JsonKind { null_value = 0, boolean, integer, number, string, array, object };
 
 /* Name of a kind, as it reads inside a message. */
@@ -47,8 +50,8 @@ inline const char *json_kind_name(JsonKind kind) {
   return "a value";
 }
 
-/* One parameter value. An array keeps its items and an object its members in
-   document order, so a caller sees the configuration as it was written. */
+/* One value. An array keeps its items and an object its members in document
+   order, so a caller sees the document as it was written. */
 class JsonValue {
 public:
   /* A null value. */

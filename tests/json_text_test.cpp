@@ -5,8 +5,8 @@
  * SPDX-License-Identifier: MIT
  *
  * parse_json_text() and to_json_text() are the two halves of the gap that
- * config/value.hpp leaves open: the model can hold a document, but only the
- * backend can read one from text or write one to text.
+ * value.hpp leaves open: the model can hold a document, but only the backend
+ * can read one from text or write one to text.
  *
  * These tests pin both halves, and they pin the claim that makes the write worth
  * having: the text is the text of the backend, byte for byte, for both layouts.

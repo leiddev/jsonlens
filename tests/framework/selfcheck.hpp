@@ -17,13 +17,12 @@
  *
  * Exactly one translation unit of a test binary must use SELFCHECK_MAIN().
  * Test cases may optionally be filtered by passing a substring on the command
- * line: jsonlens_tests pad
+ * line: jsonlens_selfcheck document
  *
  * The directory is called framework and not testing on purpose: a gitignore
  * entry for the build directory "Testing" that CMake creates used to match
- * "tests/testing" on a case insensitive file system and silently kept this
- * header out of the repository. tools/check_tracked.py now guards against that
- * class of accident.
+ * "tests/testing" on a case insensitive file system and silently keep this
+ * header out of the repository.
  */
 #ifndef JSONLENS_TESTS_SELFCHECK_HPP
 #define JSONLENS_TESTS_SELFCHECK_HPP

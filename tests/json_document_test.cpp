@@ -4,12 +4,13 @@
  * Copyright (c) 2026 BTXC Embedded Development Team
  * SPDX-License-Identifier: MIT
  *
- * A JsonDocument is what an element uses instead of the C API of the backend: a
- * value, addressed by the same path syntax as the diagnostics of the library.
+ * A JsonDocument is what an application uses instead of the C API of the
+ * backend: a value, addressed by the same path syntax as the diagnostics of the
+ * library.
  *
  * These tests pin the two rules that make it safe to hand to an application. A
  * read is strict: a path that is not there, or a value of another kind, fails
- * and says so, where the legacy library returned a default value and said
+ * and says so, where a lenient reader would return a default value and say
  * nothing. A write creates what the path needs and refuses everything else: it
  * never overwrites a number with an object, and it never pads an array with
  * values nobody asked for.
@@ -183,7 +184,7 @@ SELFCHECK_TEST(a_path_cannot_be_deeper_than_a_document_can_be) {
   SELFCHECK_CHECK_EQ(static_cast<long long>(1), number);
 }
 
-/* A leading slash is ignored because the legacy paths carry one, and it is the
+/* A leading slash is ignored because familiar paths carry one, and it is the
    only part of that syntax this library accepts. A slash inside the path is a
    slash in a key name, which is what a key named "device/port" is. */
 SELFCHECK_TEST(a_leading_slash_is_ignored_and_nothing_more) {
@@ -337,8 +338,8 @@ SELFCHECK_TEST(a_read_with_a_default_keeps_the_reason) {
   SELFCHECK_CHECK(document.get_bool_or("device.port", true));
 }
 
-/* A document whose root is an array, which is how the legacy device tables were
-   written: the whole document reads as items, and each item reads a field. */
+/* A document whose root is an array, which is a common shape for a table of
+   records: the whole document reads as items, and each item reads a field. */
 SELFCHECK_TEST(an_array_reads_as_items_including_the_root) {
   const jsonlens::JsonDocument document = loaded(sample_text);
   std::string error;

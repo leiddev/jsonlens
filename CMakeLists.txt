@@ -63,7 +63,7 @@ target_compile_features(jsonlens INTERFACE cxx_std_11)
 # Optional compiled library
 #
 # Compiling the JSON backend once keeps it out of every translation unit that
-# includes jsonlens/cjson.hpp. Consumers select this build by defining
+# includes jsonlens/detail/cjson.hpp. Consumers select this build by defining
 # JSONLENS_COMPILED, which the library propagates.
 # ---------------------------------------------------------------------------
 

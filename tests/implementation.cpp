@@ -1,5 +1,5 @@
 /*
- * json_implementation.cpp - Provides the cJSON implementation for the tests.
+ * implementation.cpp - Provides the cJSON implementation for the tests.
  *
  * In the default header only mode exactly one translation unit has to define
  * JSONLENS_IMPLEMENTATION. When the project is configured with

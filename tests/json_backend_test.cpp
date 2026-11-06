@@ -4,9 +4,9 @@
  * Copyright (c) 2026 BTXC Embedded Development Team
  * SPDX-License-Identifier: MIT
  *
- * These tests pin the serialization behaviour that the legacy bl library
- * exposed to its callers, so that replacing the backend is a conscious
- * decision instead of an accident:
+ * These tests pin the serialization behaviour that the backend exposes to
+ * callers, so that replacing the backend is a conscious decision instead of an
+ * accident:
  *
  *   - number text is produced with "%.15g" and only falls back to "%.17g"
  *     when that text does not round trip,
@@ -144,21 +144,22 @@ SELFCHECK_TEST(json_backend_formats_arrays_on_a_single_line) {
 }
 
 SELFCHECK_TEST(json_backend_parses_a_small_document) {
-  const char *text = "{\"elements\":{\"gen\":{\"index\":0,\"name\":\"gen\"}}}";
+  const char *text = "{\"devices\":{\"sensor\":{\"index\":0,\"name\":\"sensor\"}}}";
   cJSON *root = cJSON_Parse(text);
   SELFCHECK_CHECK(root != NULL);
   if (root == NULL) {
     return;
   }
 
-  const cJSON *elements = cJSON_GetObjectItemCaseSensitive(root, "elements");
-  SELFCHECK_CHECK(cJSON_IsObject(elements));
-  const cJSON *gen = (elements != NULL) ? cJSON_GetObjectItemCaseSensitive(elements, "gen") : NULL;
-  SELFCHECK_CHECK(cJSON_IsObject(gen));
-  const cJSON *name = (gen != NULL) ? cJSON_GetObjectItemCaseSensitive(gen, "name") : NULL;
+  const cJSON *devices = cJSON_GetObjectItemCaseSensitive(root, "devices");
+  SELFCHECK_CHECK(cJSON_IsObject(devices));
+  const cJSON *sensor =
+      (devices != NULL) ? cJSON_GetObjectItemCaseSensitive(devices, "sensor") : NULL;
+  SELFCHECK_CHECK(cJSON_IsObject(sensor));
+  const cJSON *name = (sensor != NULL) ? cJSON_GetObjectItemCaseSensitive(sensor, "name") : NULL;
   SELFCHECK_CHECK(cJSON_IsString(name));
   if (cJSON_IsString(name)) {
-    SELFCHECK_CHECK_STREQ(std::string("gen"), std::string(name->valuestring));
+    SELFCHECK_CHECK_STREQ(std::string("sensor"), std::string(name->valuestring));
   }
 
   cJSON_Delete(root);

@@ -8,9 +8,9 @@
  * its implementation. Two modes are supported:
  *
  *   1. Header only (default). Define JSONLENS_IMPLEMENTATION in exactly
- *      one translation unit before including any jsonlens JSON header. All
- *      other translation units include the header normally and only see the
- *      declarations.
+ *      one translation unit before including any jsonlens header that uses the
+ *      backend. All other translation units include the header normally and only
+ *      see the declarations.
  *
  *   2. Compiled. Configure the project with -DJSONLENS_COMPILED=ON. The
  *      implementation then comes from the jsonlens library and consumers must
