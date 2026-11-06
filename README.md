@@ -42,9 +42,10 @@ Most C++ JSON libraries optimise for parsing large documents quickly. This one
 optimises for the smaller job of reading a configuration file that a human
 wrote, and for failing loudly when that file is wrong:
 
-- **A strict read.** The text must be exactly one JSON value. Trailing data,
-  duplicate object keys, `01`, `.5`, a raw control character inside a string and
-  a lone `\u` escape are errors, not things to guess about. Duplicates are
+- **A strict read.** The text must be exactly one JSON value and it must be
+  well-formed UTF-8. Trailing data, duplicate object keys, `01`, `.5`, a raw
+  control character inside a string, an unpaired surrogate escape and a number
+  that overflows a double are errors, not things to guess about. Duplicates are
   rejected because a parser that keeps the last one turns a copy-paste mistake
   into a value nobody can find later.
 - **Diagnostics a person can act on.** Every key and value is recorded with its
@@ -232,7 +233,7 @@ if (!document.get_integer("device.port", port, error)) {
 }
 
 // A field that may be absent:
-int retries = document.get_integer_or("device.retries", 3);
+long long retries = document.get_integer_or("device.retries", 3);
 if (!document.last_error().empty()) {
   std::fprintf(stderr, "using the default: %s\n", document.last_error().c_str());
 }
