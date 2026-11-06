@@ -17,33 +17,29 @@ namespace jsonlens {
 /// Major version component.
 ///
 /// The major component changes when the public API breaks.
-inline int version_major()
-{
-    return JSONLENS_VERSION_MAJOR;
+inline int version_major() {
+  return JSONLENS_VERSION_MAJOR;
 }
 
 /// Minor version component.
 ///
 /// The minor component changes when the public API grows in a compatible way.
-inline int version_minor()
-{
-    return JSONLENS_VERSION_MINOR;
+inline int version_minor() {
+  return JSONLENS_VERSION_MINOR;
 }
 
 /// Patch version component.
 ///
 /// The patch component changes when a released behaviour is fixed.
-inline int version_patch()
-{
-    return JSONLENS_VERSION_PATCH;
+inline int version_patch() {
+  return JSONLENS_VERSION_PATCH;
 }
 
 /// Version of the library as "major.minor.patch".
-inline const char *version_string()
-{
-    return JSONLENS_VERSION_STRING;
+inline const char *version_string() {
+  return JSONLENS_VERSION_STRING;
 }
 
-}  // namespace jsonlens
+} // namespace jsonlens
 
-#endif  // JSONLENS_VERSION_HPP
+#endif // JSONLENS_VERSION_HPP

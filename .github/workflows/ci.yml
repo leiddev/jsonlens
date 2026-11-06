@@ -1,0 +1,152 @@
+#
+# ci.yml - Continuous integration for jsonlens.
+#
+# Copyright (c) 2026 BTXC Embedded Development Team
+# SPDX-License-Identifier: MIT
+#
+# Job groups:
+#
+#   vendor    the vendored cJSON files still match the recorded digests
+#   format    the pinned clang-format release
+#   linux     x86_64 and i386, each header-only and compiled
+#   windows   MSVC x64 and Win32, each Debug and Release
+#
+# The four architecture and mode combinations on Linux and the four on Windows
+# are the two axes the library promises to support: 32 bit and 64 bit on both
+# operating systems, with the backend in the header and in a library.
+#
+# No job downloads a third party source archive: cJSON is vendored, so a build
+# works on a machine without access to github.com as well.
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  vendor:
+    name: vendor
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check the vendored cJSON digests
+        working-directory: include/jsonlens/detail/cjson
+        run: |
+          cat > expected.sha256 <<'EOF'
+          a2470214ebeeb3ba196b0d221b77357348603f769343e1ae5be06a6630fa7169  cJSON.c
+          f1a5e0b21e357eb3abc1de9b2c494410156fe4de323aadb7221fb45b413bcbdc  cJSON.h
+          EOF
+          sha256sum -c expected.sha256
+
+  format:
+    name: format (clang-format 19.1.7)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install the pinned clang-format
+        run: pip install clang-format==19.1.7
+
+      - name: Check formatting
+        run: |
+          set -euo pipefail
+          files=$(git ls-files \
+            'include/jsonlens/*.hpp' \
+            'include/jsonlens/detail/*.hpp' \
+            'src/*.cpp' \
+            'tests/*.cpp' \
+            'tests/framework/*.hpp')
+          clang-format --version
+          clang-format --dry-run --Werror $files
+
+  linux:
+    name: linux (${{ matrix.arch }}, ${{ matrix.variant }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
+        variant: [header-only, compiled]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install the 32 bit toolchain
+        if: matrix.arch == 'x86'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-multilib
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "${{ matrix.arch }}" = "x86" ]; then
+            args+=(-DCMAKE_CXX_FLAGS=-m32 -DCMAKE_EXE_LINKER_FLAGS=-m32)
+          fi
+          if [ "${{ matrix.variant }}" = "compiled" ]; then
+            args+=(-DJSONLENS_COMPILED=ON)
+          else
+            args+=(-DJSONLENS_COMPILED=OFF)
+          fi
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DJSONLENS_BUILD_TESTS=ON \
+            -DJSONLENS_WARNINGS_AS_ERRORS=ON \
+            "${args[@]}"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Confirm the binary architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          file build/tests/jsonlens_selfcheck
+          if [ "${{ matrix.arch }}" = "x86" ]; then
+            file build/tests/jsonlens_selfcheck | grep -q "ELF 32-bit"
+          else
+            file build/tests/jsonlens_selfcheck | grep -q "ELF 64-bit"
+          fi
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  windows:
+    name: windows (${{ matrix.arch }}, ${{ matrix.build_type }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, Win32]
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -G "Visual Studio 17 2022" -A ${{ matrix.arch }}
+          -DJSONLENS_BUILD_TESTS=ON
+          -DJSONLENS_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }}
+
+      - name: Test
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure

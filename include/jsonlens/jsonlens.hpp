@@ -11,11 +11,11 @@
 #ifndef JSONLENS_JSONLENS_HPP
 #define JSONLENS_JSONLENS_HPP
 
-#include "jsonlens/version.hpp"
-#include "jsonlens/value.hpp"
+#include "jsonlens/document.hpp"
 #include "jsonlens/json_index.hpp"
 #include "jsonlens/read.hpp"
+#include "jsonlens/value.hpp"
+#include "jsonlens/version.hpp"
 #include "jsonlens/write.hpp"
-#include "jsonlens/document.hpp"
 
-#endif  // JSONLENS_JSONLENS_HPP
+#endif // JSONLENS_JSONLENS_HPP

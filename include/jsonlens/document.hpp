@@ -52,11 +52,11 @@
 #include <string>
 #include <vector>
 
-#include "jsonlens/value.hpp"
 #include "jsonlens/detail/decimal.hpp"
 #include "jsonlens/detail/text_file.hpp"
 #include "jsonlens/json_index.hpp"
 #include "jsonlens/read.hpp"
+#include "jsonlens/value.hpp"
 #include "jsonlens/write.hpp"
 
 namespace jsonlens {

@@ -1,0 +1,21 @@
+# Normalize all text files to LF so that builds are identical on every platform.
+* text=auto eol=lf
+
+# Vendored third party sources must stay byte-for-byte identical to upstream.
+# Disabling text conversion keeps the recorded SHA-256 digests valid.
+include/jsonlens/detail/cjson/cJSON.c -text
+include/jsonlens/detail/cjson/cJSON.h -text
+
+# Keep generated project files readable in Visual Studio.
+*.sln text eol=crlf
+*.vcxproj text eol=crlf
+*.vcxproj.filters text eol=crlf
+
+# Binary artifacts are never diffed.
+*.png binary
+*.jpg binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.lib binary
+*.pdb binary

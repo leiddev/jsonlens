@@ -286,9 +286,9 @@ inline int run_all(const char *filter) {
 } /* namespace jsonlens */
 
 #define SELFCHECK_TEST(test_name)                                                                  \
-  static void jsonlens_selfcheck_##test_name();                                                   \
-  static const ::jsonlens::selfcheck::Registrar jsonlens_selfcheck_registrar_##test_name(        \
-      #test_name, &jsonlens_selfcheck_##test_name);                                               \
+  static void jsonlens_selfcheck_##test_name();                                                    \
+  static const ::jsonlens::selfcheck::Registrar jsonlens_selfcheck_registrar_##test_name(          \
+      #test_name, &jsonlens_selfcheck_##test_name);                                                \
   static void jsonlens_selfcheck_##test_name()
 
 #define SELFCHECK_CHECK(expression)                                                                \
@@ -298,13 +298,13 @@ inline int run_all(const char *filter) {
   ::jsonlens::selfcheck::check_true_value(__FILE__, __LINE__, #expression, (message), (expression))
 
 #define SELFCHECK_CHECK_EQ(expected, actual)                                                       \
-  ::jsonlens::selfcheck::check_equal(__FILE__, __LINE__, #expected " == " #actual, (expected),    \
-                                      (actual))
+  ::jsonlens::selfcheck::check_equal(__FILE__, __LINE__, #expected " == " #actual, (expected),     \
+                                     (actual))
 
 #define SELFCHECK_CHECK_STREQ(expected, actual)                                                    \
-  ::jsonlens::selfcheck::check_equal_text(__FILE__, __LINE__, #expected " == " #actual,           \
-                                           ::jsonlens::selfcheck::to_text(expected),              \
-                                           ::jsonlens::selfcheck::to_text(actual))
+  ::jsonlens::selfcheck::check_equal_text(__FILE__, __LINE__, #expected " == " #actual,            \
+                                          ::jsonlens::selfcheck::to_text(expected),                \
+                                          ::jsonlens::selfcheck::to_text(actual))
 
 #define SELFCHECK_CHECK_NEAR(expected, actual, tolerance)                                          \
   ::jsonlens::selfcheck::check_near(__FILE__, __LINE__, #actual, (expected), (actual), (tolerance))
@@ -312,13 +312,12 @@ inline int run_all(const char *filter) {
 #define SELFCHECK_CHECK_CONTAINS(haystack, needle)                                                 \
   ::jsonlens::selfcheck::check_contains(__FILE__, __LINE__, #haystack, (haystack), (needle))
 
-#define SELFCHECK_FAIL(message)                                                                    \
-  ::jsonlens::selfcheck::report_failure(__FILE__, __LINE__, (message))
+#define SELFCHECK_FAIL(message) ::jsonlens::selfcheck::report_failure(__FILE__, __LINE__, (message))
 
 #define SELFCHECK_MAIN()                                                                           \
   int main(int argc, char **argv) {                                                                \
     const char *filter = (argc > 1) ? argv[1] : "";                                                \
-    return ::jsonlens::selfcheck::run_all(filter);                                                \
+    return ::jsonlens::selfcheck::run_all(filter);                                                 \
   }
 
 #endif /* JSONLENS_TESTS_SELFCHECK_HPP */

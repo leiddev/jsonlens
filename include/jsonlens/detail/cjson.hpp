@@ -35,9 +35,9 @@
  */
 #define JSONLENS_DETAIL_STRINGIZE_IMPL(text) #text
 #define JSONLENS_DETAIL_STRINGIZE(text) JSONLENS_DETAIL_STRINGIZE_IMPL(text)
-#define JSONLENS_CJSON_VERSION                                                                    \
-  JSONLENS_DETAIL_STRINGIZE(CJSON_VERSION_MAJOR)                                                  \
-  "." JSONLENS_DETAIL_STRINGIZE(CJSON_VERSION_MINOR) "." JSONLENS_DETAIL_STRINGIZE(              \
+#define JSONLENS_CJSON_VERSION                                                                     \
+  JSONLENS_DETAIL_STRINGIZE(CJSON_VERSION_MAJOR)                                                   \
+  "." JSONLENS_DETAIL_STRINGIZE(CJSON_VERSION_MINOR) "." JSONLENS_DETAIL_STRINGIZE(                \
       CJSON_VERSION_PATCH)
 
 #if defined(JSONLENS_IMPLEMENTATION)

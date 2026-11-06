@@ -37,9 +37,9 @@
 
 #include <string>
 
-#include "jsonlens/value.hpp"
 #include "jsonlens/detail/cjson.hpp"
 #include "jsonlens/json_index.hpp"
+#include "jsonlens/value.hpp"
 
 namespace jsonlens {
 
