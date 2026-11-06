@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   iostreams.
 - `<jsonlens/text_file.hpp>` holds `read_text_file()` and `write_text_file()`,
   which were under `detail/` and are part of the documented API now.
+- `JsonDuplicateKeys::allow` lets a read continue past a repeated key, for a
+  caller that reports the duplicates from `JsonIndex` itself and still has to
+  describe the rest of the document. The last value is kept, in the position of
+  the first; rejecting is still the default.
 
 ### Changed
 

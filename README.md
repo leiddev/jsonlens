@@ -207,6 +207,22 @@ text, and the scanner is the stricter of the two.
 The nesting limit is also what keeps the reader's recursion bounded: one read of
 an over-deep document fails instead of running out of stack.
 
+A repeated key is refused by default and can be read on request, which is not the
+same as being tolerated:
+
+```cpp
+// A tool that reports duplicates itself, and still has to describe the rest of
+// the document, asks for the last value and reports the list from the scanner.
+if (!jsonlens::parse_json_text(text, value, error, jsonlens::JsonDuplicateKeys::allow)) {
+  return 1;
+}
+const std::string duplicated = index.duplicated_key_list();   // "port"
+```
+
+The value that is kept is the last one and the key stays where it first
+appeared, the same rule `JsonDocument::set()` follows, so there is one answer to
+"which one won" in the whole library.
+
 ### Numbers
 
 The backend holds every number as a double, so this is where a reader can quietly

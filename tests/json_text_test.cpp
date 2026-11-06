@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "framework/selfcheck.hpp"
 
@@ -174,6 +175,36 @@ SELFCHECK_TEST(reading_refuses_a_key_that_repeats) {
   /* A repeat inside an array of objects is still a repeat. */
   SELFCHECK_CHECK(!jsonlens::parse_json_text("[{\"a\":1,\"a\":2}]", value, error));
   SELFCHECK_CHECK_CONTAINS(error, "duplicated object key(s): a");
+}
+
+/* A caller that reports duplicates as a finding of its own still has to describe
+   the rest of the document, so a read may be told to continue: the last value is
+   the one that is kept, and the key stays where it first appeared. */
+SELFCHECK_TEST(reading_a_document_that_repeats_a_key_can_be_allowed) {
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("{\"b\":1,\"a\":2,\"b\":3}", value, error,
+                                                jsonlens::JsonDuplicateKeys::allow),
+                      error);
+  const std::vector<std::string> keys = value.keys();
+  SELFCHECK_CHECK(keys.size() == 2);
+  SELFCHECK_CHECK(keys.size() == 2 && keys[0] == "b");
+  SELFCHECK_CHECK(keys.size() == 2 && keys[1] == "a");
+  long long number = 0;
+  const jsonlens::JsonValue *const repeated = value.member("b");
+  SELFCHECK_CHECK(repeated != 0 && repeated->as_integer(number));
+  SELFCHECK_CHECK(number == 3);
+
+  /* The list the caller reports comes from the scanner, which is not told to look
+     away from anything. */
+  jsonlens::JsonIndex index;
+  SELFCHECK_CHECK(jsonlens::JsonIndex::build("{\"b\":1,\"a\":2,\"b\":3}", index, error));
+  SELFCHECK_CHECK_STREQ(std::string("b"), index.duplicated_key_list());
+
+  /* It is not a lenient mode: every other rule still applies. */
+  SELFCHECK_CHECK(
+      !jsonlens::parse_json_text("{\"a\":1,}", value, error, jsonlens::JsonDuplicateKeys::allow));
+  SELFCHECK_CHECK_CONTAINS(error, "not valid JSON");
 }
 
 SELFCHECK_TEST(reading_refuses_a_document_that_is_nested_too_deep) {

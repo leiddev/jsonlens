@@ -131,12 +131,26 @@ inline bool to_json_value(const JsonIndex &index, const std::string &path, const
 
 } /* namespace detail */
 
+/* What a read does with an object key that appears more than once. */
+enum class JsonDuplicateKeys {
+  /* A repeated key is an error, which is the default: a parser that silently
+     keeps one of the two turns a copy-paste mistake into a value nobody can find
+     later, and no rule about which one wins makes that better. */
+  reject,
+  /* The last value is read and the key keeps the position of the first. A caller
+     that reports the duplicates itself, and still has to describe the rest of the
+     document, needs this; it is not a lenient mode, because the text has already
+     passed the scanner, which reports every repeated name. */
+  allow
+};
+
 /* Read one JSON document. Returns false and fills error when the text is not
-   JSON, when a key repeats, when the backend refuses it or when a number is
-   outside the range the backend can hold. The model is left untouched on
-   failure, and any value is accepted as a document, including a number or a
-   string at the top level. */
-inline bool parse_json_text(const std::string &text, JsonValue &value, std::string &error) {
+   JSON, when a key repeats and duplicates is JsonDuplicateKeys::reject, when the
+   backend refuses it or when a number is outside the range the backend can hold.
+   The model is left untouched on failure, and any value is accepted as a
+   document, including a number or a string at the top level. */
+inline bool parse_json_text(const std::string &text, JsonValue &value, std::string &error,
+                            JsonDuplicateKeys duplicates = JsonDuplicateKeys::reject) {
   /* The backend reads a C string, so a NUL byte would end its view of the text
      while the scanner still saw what came after it. The two would disagree about
      where the document ends, so the text is refused before either of them runs. */
@@ -152,7 +166,7 @@ inline bool parse_json_text(const std::string &text, JsonValue &value, std::stri
     return false;
   }
   const std::string duplicated = index.duplicated_key_list();
-  if (!duplicated.empty()) {
+  if (duplicates == JsonDuplicateKeys::reject && !duplicated.empty()) {
     error = "duplicated object key(s): " + duplicated;
     return false;
   }
