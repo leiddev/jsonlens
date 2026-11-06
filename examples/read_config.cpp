@@ -47,6 +47,14 @@ int main(int argc, char **argv) {
 
   const std::string name = document.get_string_or("device.name", "unnamed");
 
+  /* A scalar array. get_int_array() checks every item, so one item of another
+     kind fails the read and is named, instead of being skipped or truncated. */
+  std::vector<long long> channels;
+  if (!document.get_int_array("device.channels", channels, error)) {
+    std::fprintf(stderr, "%s\n", error.c_str());
+    return 1;
+  }
+
   /* A table of records: the array reads as documents, and each one reads its own
      fields by the same path syntax. */
   std::vector<jsonlens::JsonDocument> pads;
@@ -56,6 +64,11 @@ int main(int argc, char **argv) {
   }
 
   std::printf("device %s, port %lld, retries %lld\n", name.c_str(), port, retries);
+  std::printf("  channels:");
+  for (std::size_t index = 0; index < channels.size(); ++index) {
+    std::printf(" %lld", channels[index]);
+  }
+  std::printf("\n");
   for (std::size_t index = 0; index < pads.size(); ++index) {
     std::printf("  pad %s: %s\n", pads[index].get_string_or("name", "?").c_str(),
                 pads[index].get_bool_or("enabled", false) ? "enabled" : "disabled");

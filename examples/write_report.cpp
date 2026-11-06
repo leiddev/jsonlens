@@ -33,6 +33,27 @@ int main(int argc, char **argv) {
 
   jsonlens::JsonDocument document = jsonlens::JsonDocument::of(report);
   std::string error;
+
+  /* An array grows at its own end: the index after the last item appends to it,
+     and a larger index is an error that names the array and how many items it
+     holds. Here a second frame is appended to the one built above. */
+  jsonlens::JsonValue second = jsonlens::JsonValue::make_object();
+  second.add("index", jsonlens::JsonValue::make_integer(1));
+  second.add("lost", jsonlens::JsonValue::make_integer(2));
+  second.add("rate", jsonlens::JsonValue::make_number(0.5));
+  if (!document.set("frames[1]", second, error)) {
+    std::fprintf(stderr, "%s\n", error.c_str());
+    return 1;
+  }
+
+  /* A path creates the steps it needs, so an array of scalars is one write per
+     item: channels does not exist yet, and the first write creates the array. */
+  if (!document.set("channels[0]", jsonlens::JsonValue::make_integer(115200), error) ||
+      !document.set("channels[1]", jsonlens::JsonValue::make_integer(9600), error)) {
+    std::fprintf(stderr, "%s\n", error.c_str());
+    return 1;
+  }
+
   if (!document.save_file(path, error)) {
     std::fprintf(stderr, "%s\n", error.c_str());
     return 1;

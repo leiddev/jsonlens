@@ -148,16 +148,21 @@ prints:
 
 ```
 device sensor-1, port 115200, retries 3
+  channels: 115200 9600 57600
   pad left: enabled
   pad right: disabled
 ```
 
-`read_config` asks for the fields it needs and for the ones it can default,
-and prints the reason whenever it falls back. `diagnose` uses `json_index.hpp`
-alone, with no backend and no `JSONLENS_IMPLEMENTATION`, to list the duplicated
-keys of `sample-broken.json` and the line and column of `device.port`.
-`write_report` builds a document in code and writes it out; run it twice and
-diff the two files, and there is no diff.
+`read_config` asks for the fields it needs and for the ones it can default, and
+prints the reason whenever it falls back. It reads an array both ways: `channels`
+as a scalar array with `get_int_array()`, and `pads` as a table of records with
+`get_documents()`, where each item reads its own fields by path. `write_report`
+shows the other side: an array built in code, a second item appended by path with
+`set("frames[1]", ...)`, and an array of scalars created from nothing by the
+first `set("channels[0]", ...)`. Run it twice and diff the two files, and there is
+no diff. `diagnose` uses `json_index.hpp` alone, with no backend and no
+`JSONLENS_IMPLEMENTATION`, to list the duplicated keys of `sample-broken.json`
+and the line and column of `device.port`.
 
 The examples are documentation that the compiler checks: they are built on every
 push in the package jobs of CI, and they are not installed.
