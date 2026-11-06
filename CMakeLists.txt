@@ -77,6 +77,10 @@ if(JSONLENS_COMPILED)
     # JSONLENS_IMPLEMENTATION and must not also see JSONLENS_COMPILED.
     target_compile_definitions(jsonlens_compiled INTERFACE JSONLENS_COMPILED)
     set_target_properties(jsonlens_compiled PROPERTIES
+        # The alias below is what add_subdirectory users link against; an alias is
+        # not exported, so the export needs the same name or find_package users
+        # would have to spell the target jsonlens::jsonlens_compiled.
+        EXPORT_NAME compiled
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
@@ -109,9 +113,12 @@ if(JSONLENS_INSTALL)
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+    # The .c file travels with the headers on purpose: a consumer that defines
+    # JSONLENS_IMPLEMENTATION compiles the backend from its own translation unit,
+    # so cjson.hpp has to be able to include it after the install as well.
     install(DIRECTORY include/jsonlens
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.c")
 
     install(EXPORT jsonlensTargets
         FILE jsonlensTargets.cmake

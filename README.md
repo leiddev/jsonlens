@@ -314,6 +314,19 @@ value model, the scanner, the backend's exact output, the document layer, the
 file helpers, the version macros, and the self-containment of every public
 header (each one is compiled alone).
 
+The install rules are exercised separately by `tests/consumer`, a project that
+only sees an installed tree:
+
+```sh
+cmake -S . -B build -DJSONLENS_COMPILED=ON
+cmake --build build
+cmake --install build --prefix /tmp/jsonlens
+cmake -S tests/consumer -B build-consumer -DCMAKE_PREFIX_PATH=/tmp/jsonlens
+cmake --build build-consumer
+./build-consumer/header_only
+./build-consumer/compiled
+```
+
 CI runs on every push and pull request:
 
 | | x64 | x86 |
@@ -322,8 +335,9 @@ CI runs on every push and pull request:
 | Windows (MSVC, VS 2022) | header-only + compiled, Debug + Release | header-only + compiled, Debug + Release |
 
 The vendor job checks the SHA-256 of both cJSON files against the digests
-recorded in `THIRD_PARTY_NOTICES.md`, and the format job enforces
-`clang-format` 19.1.7 on the first-party sources.
+recorded in `THIRD_PARTY_NOTICES.md`, the format job enforces `clang-format`
+19.1.7 on the first-party sources, and the package jobs install the library and
+build `tests/consumer` against the prefix on Linux and on Windows.
 
 ## Contributing
 

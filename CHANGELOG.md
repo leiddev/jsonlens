@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a surrogate and a code point past U+10FFFF are errors. A `\u` escape that is
   half of a surrogate pair is an error instead of three bytes that are not UTF-8.
 - A key that holds a NUL byte is refused when writing, as a string already was.
+- The install rules did not ship `cJSON.c`, so a header-only consumer of an
+  installed package could not compile the backend it includes.
+- The static library was exported as `jsonlens::jsonlens_compiled`, which meant
+  `find_package` users could not link the `jsonlens::compiled` that an
+  `add_subdirectory` user links. The export name is now the same.
 
 ## [0.1.0] - 2026-11-06
 
