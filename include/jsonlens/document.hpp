@@ -52,10 +52,10 @@
 #include <string>
 #include <vector>
 
-#include "jsonlens/detail/decimal.hpp"
-#include "jsonlens/detail/text_file.hpp"
+#include "jsonlens/decimal.hpp"
 #include "jsonlens/json_index.hpp"
 #include "jsonlens/read.hpp"
+#include "jsonlens/text_file.hpp"
 #include "jsonlens/value.hpp"
 #include "jsonlens/write.hpp"
 
@@ -298,8 +298,8 @@ private:
       return false;
     }
     if (steps.size() > json_nesting_limit()) {
-      error = path + ": the path has " + detail::decimal_text(steps.size()) +
-              " step(s), more than the limit of " + detail::decimal_text(json_nesting_limit());
+      error = path + ": the path has " + decimal_text(steps.size()) +
+              " step(s), more than the limit of " + decimal_text(json_nesting_limit());
       return false;
     }
     return true;
@@ -367,7 +367,7 @@ private:
         return false;
       }
       if (step.index > node.size()) {
-        error = where + ": the array holds " + detail::decimal_text(node.size()) + " item(s), so " +
+        error = where + ": the array holds " + decimal_text(node.size()) + " item(s), so " +
                 append_json_path_index(prefix, step.index) + " is out of range";
         return false;
       }

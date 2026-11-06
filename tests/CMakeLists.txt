@@ -46,8 +46,8 @@ set(jsonlens_public_headers
     write.hpp
     document.hpp
     detail/byte_less.hpp
-    detail/decimal.hpp
-    detail/text_file.hpp
+    decimal.hpp
+    text_file.hpp
     detail/cjson.hpp
     detail/cjson_owner.hpp)
 

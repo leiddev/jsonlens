@@ -28,8 +28,8 @@
  * follows, so a caller that keeps its previous text keeps it whole and a caller
  * that checks the result cannot mistake half a file for a file.
  */
-#ifndef JSONLENS_DETAIL_TEXT_FILE_HPP
-#define JSONLENS_DETAIL_TEXT_FILE_HPP
+#ifndef JSONLENS_TEXT_FILE_HPP
+#define JSONLENS_TEXT_FILE_HPP
 
 #include <cstdio>
 #include <fstream>
@@ -91,4 +91,4 @@ inline bool write_text_file(const std::string &path, const std::string &text, st
 
 } /* namespace jsonlens */
 
-#endif /* JSONLENS_DETAIL_TEXT_FILE_HPP */
+#endif /* JSONLENS_TEXT_FILE_HPP */

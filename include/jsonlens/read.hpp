@@ -44,9 +44,9 @@
 #include <cmath>
 #include <string>
 
+#include "jsonlens/decimal.hpp"
 #include "jsonlens/detail/cjson.hpp"
 #include "jsonlens/detail/cjson_owner.hpp"
-#include "jsonlens/detail/decimal.hpp"
 #include "jsonlens/json_index.hpp"
 #include "jsonlens/value.hpp"
 
@@ -142,8 +142,7 @@ inline bool parse_json_text(const std::string &text, JsonValue &value, std::stri
      where the document ends, so the text is refused before either of them runs. */
   const std::size_t nul = text.find('\0');
   if (nul != std::string::npos) {
-    error = "the text holds a NUL byte at offset " + detail::decimal_text(nul) +
-            ", which JSON text cannot";
+    error = "the text holds a NUL byte at offset " + decimal_text(nul) + ", which JSON text cannot";
     return false;
   }
   JsonIndex index;

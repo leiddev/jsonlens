@@ -68,6 +68,8 @@ wrote, and for failing loudly when that file is wrong:
 | `<jsonlens/read.hpp>` | `parse_json_text()`: strict text to `JsonValue`. |
 | `<jsonlens/write.hpp>` | `to_json_text()`: `JsonValue` to text, formatted or compact. |
 | `<jsonlens/document.hpp>` | `JsonDocument`: typed getters and setters addressed by path. |
+| `<jsonlens/text_file.hpp>` | `read_text_file()` and `write_text_file()`: a whole file at a time, with the operating system message on failure. |
+| `<jsonlens/decimal.hpp>` | `decimal_text()` and `signed_text()`: an integer as decimal text, without iostreams, for callers that format their own messages. |
 | `<jsonlens/version.hpp>` | Version macros and functions. |
 | `<jsonlens/jsonlens.hpp>` | Umbrella header that includes all of the above. |
 
@@ -328,7 +330,7 @@ the same contract.
 
 ## Files
 
-`<jsonlens/detail/text_file.hpp>` and the file helpers on `JsonDocument`
+`<jsonlens/text_file.hpp>` and the file helpers on `JsonDocument`
 (`load_file`, `save_file`) read and write the whole file, not a line at a time.
 A text read back is the text that was written; a file that cannot be opened or
 read fails with the message from the operating system rather than silently

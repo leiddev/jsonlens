@@ -14,8 +14,8 @@
  * Try it with examples/sample-broken.json, then with a file that has a missing
  * comma.
  */
-#include <jsonlens/detail/text_file.hpp>
 #include <jsonlens/json_index.hpp>
+#include <jsonlens/text_file.hpp>
 
 #include <cstdio>
 #include <string>

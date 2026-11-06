@@ -13,7 +13,7 @@
  * A second printer in this library would be a second dialect, and these tests
  * would not notice; comparing against the backend is what notices.
  */
-#include <jsonlens/detail/decimal.hpp>
+#include <jsonlens/decimal.hpp>
 #include <jsonlens/jsonlens.hpp>
 
 #include <cstddef>

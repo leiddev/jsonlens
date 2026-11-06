@@ -1,22 +1,22 @@
 /*
- * decimal.hpp - Decimal text of an integer value, without streams.
+ * decimal.hpp - Decimal text of an integer, without the iostream machinery.
  *
  * Copyright (c) 2026 BTXC Embedded Development Team
  * SPDX-License-Identifier: MIT
  *
- * Positions, counts and array subscripts all end up in messages. Formatting
- * them through <sstream> would drag the iostream machinery into every
- * translation unit that reports a diagnostic, which is exactly what a header
+ * Positions, counts and array subscripts all end up in the messages this
+ * library reports, and a caller that formats its own diagnostics needs the same
+ * spelling. Doing that through <sstream> would drag the iostream machinery into
+ * every translation unit that reports something, which is exactly what a header
  * only library must avoid.
  */
-#ifndef JSONLENS_DETAIL_DECIMAL_HPP
-#define JSONLENS_DETAIL_DECIMAL_HPP
+#ifndef JSONLENS_DECIMAL_HPP
+#define JSONLENS_DECIMAL_HPP
 
 #include <cstddef>
 #include <string>
 
 namespace jsonlens {
-namespace detail {
 
 /* Decimal text of an unsigned value, "0" for zero. */
 inline std::string decimal_text(std::size_t value) {
@@ -41,7 +41,6 @@ inline std::string signed_text(long long value) {
   return decimal_text(static_cast<std::size_t>(value));
 }
 
-} /* namespace detail */
 } /* namespace jsonlens */
 
-#endif /* JSONLENS_DETAIL_DECIMAL_HPP */
+#endif /* JSONLENS_DECIMAL_HPP */

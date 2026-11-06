@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/`: three programs that read a configuration, diagnose a file with
   the scanner alone, and build a report in code, built with
   `JSONLENS_BUILD_EXAMPLES=ON` and run by the package jobs of CI.
+- `jsonlens::decimal_text()` and `jsonlens::signed_text()` are public API in
+  `<jsonlens/decimal.hpp>`, for a caller that formats its own messages without
+  iostreams.
+- `<jsonlens/text_file.hpp>` holds `read_text_file()` and `write_text_file()`,
+  which were under `detail/` and are part of the documented API now.
 
 ### Changed
 

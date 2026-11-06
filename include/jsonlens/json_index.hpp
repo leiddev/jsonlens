@@ -38,8 +38,8 @@
 #include <string>
 #include <vector>
 
+#include "jsonlens/decimal.hpp"
 #include "jsonlens/detail/byte_less.hpp"
-#include "jsonlens/detail/decimal.hpp"
 
 namespace jsonlens {
 
@@ -56,7 +56,7 @@ inline std::size_t json_nesting_limit() {
 
 /* Message of the one failure that reports the limit. */
 inline std::string json_nesting_error() {
-  return "nesting is deeper than the limit of " + detail::decimal_text(json_nesting_limit());
+  return "nesting is deeper than the limit of " + decimal_text(json_nesting_limit());
 }
 
 /* What a path points at. */
@@ -148,7 +148,7 @@ inline std::string append_json_path_key(const std::string &path, const std::stri
 
 /* Append one array subscript to a path. */
 inline std::string append_json_path_index(const std::string &path, std::size_t index) {
-  return path + "[" + detail::decimal_text(index) + "]";
+  return path + "[" + decimal_text(index) + "]";
 }
 
 /* One step of a relative path: an object key or an array subscript. */
