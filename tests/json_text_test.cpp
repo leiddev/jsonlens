@@ -317,6 +317,85 @@ SELFCHECK_TEST(writing_refuses_a_string_that_holds_a_NUL_byte) {
   SELFCHECK_CHECK(!jsonlens::to_json_text(jsonlens::JsonValue::make_null(), false).empty());
 }
 
+/* A value that cannot be written is refused wherever it sits, and the path in the
+   message is the path a caller can hand to get_value(): a subscript for an item of
+   an array, a dot for a key, and the whole walk down to the string that holds the
+   byte. */
+SELFCHECK_TEST(writing_names_the_path_of_a_string_that_holds_a_NUL_byte) {
+  const std::string with_nul("a\0b", 3);
+
+  jsonlens::JsonValue array = jsonlens::JsonValue::make_array();
+  array.add(jsonlens::JsonValue::make_integer(1));
+  array.add(jsonlens::JsonValue::make_string(with_nul));
+  std::string text = "before";
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::to_json_text(array, text, error, false));
+  /* An item of a root array is named by its subscript alone, which is the path a
+     read of that item takes. */
+  SELFCHECK_CHECK_STREQ(
+      std::string("the string at '[1]' holds a NUL byte, which the backend cannot write"), error);
+  /* A write that fails leaves the text alone, so a caller that keeps what it had
+     keeps it whole. */
+  SELFCHECK_CHECK_STREQ(std::string("before"), text);
+
+  /* The same value one level down, inside an object inside an array. */
+  jsonlens::JsonValue inner = jsonlens::JsonValue::make_object();
+  inner.add("name", jsonlens::JsonValue::make_string(with_nul));
+  jsonlens::JsonValue outer = jsonlens::JsonValue::make_object();
+  jsonlens::JsonValue table = jsonlens::JsonValue::make_array();
+  table.add(inner);
+  outer.add("devices", table);
+  SELFCHECK_CHECK(!jsonlens::to_json_text(outer, text, error, false));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("'devices[0].name'"));
+
+  /* A key that holds the byte is named by the object it sits in, because the key
+     is copied before the member is written. */
+  jsonlens::JsonValue deep = jsonlens::JsonValue::make_object();
+  jsonlens::JsonValue nested = jsonlens::JsonValue::make_object();
+  nested.add(with_nul, jsonlens::JsonValue::make_integer(1));
+  deep.add("outer", nested);
+  SELFCHECK_CHECK(!jsonlens::to_json_text(deep, text, error, false));
+  SELFCHECK_CHECK_STREQ(std::string("the key of 'outer' holds a NUL byte, "
+                                    "which the backend cannot write"),
+                        error);
+
+  /* A key at the top level is named by the document itself. */
+  jsonlens::JsonValue top = jsonlens::JsonValue::make_object();
+  top.add(with_nul, jsonlens::JsonValue::make_integer(1));
+  SELFCHECK_CHECK(!jsonlens::to_json_text(top, text, error, false));
+  SELFCHECK_CHECK_STREQ(std::string("the key at the document holds a NUL byte, "
+                                    "which the backend cannot write"),
+                        error);
+}
+
+/* The text that was given is what comes back on the way out, for a document whose
+   root is not a container: a number, a string or a boolean is a document too. */
+SELFCHECK_TEST(a_document_of_one_scalar_is_written_as_one_value) {
+  SELFCHECK_CHECK_STREQ(std::string("null"),
+                        jsonlens::to_json_text(jsonlens::JsonValue::make_null(), false));
+  SELFCHECK_CHECK_STREQ(std::string("true"),
+                        jsonlens::to_json_text(jsonlens::JsonValue::make_bool(true), false));
+  SELFCHECK_CHECK_STREQ(std::string("false"),
+                        jsonlens::to_json_text(jsonlens::JsonValue::make_bool(false), false));
+  SELFCHECK_CHECK_STREQ(std::string("\"text\""),
+                        jsonlens::to_json_text(jsonlens::JsonValue::make_string("text"), false));
+  SELFCHECK_CHECK_STREQ(std::string("\"\""),
+                        jsonlens::to_json_text(jsonlens::JsonValue::make_string(""), false));
+  SELFCHECK_CHECK_STREQ(std::string("0"),
+                        jsonlens::to_json_text(jsonlens::JsonValue::make_integer(0), false));
+  /* A large magnitude is the backend's exponent form, and reading it back gives
+     the same number. */
+  SELFCHECK_CHECK_STREQ(std::string("1e+300"),
+                        jsonlens::to_json_text(jsonlens::JsonValue::make_number(1e300), false));
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK_MSG(
+      jsonlens::parse_json_text(
+          jsonlens::to_json_text(jsonlens::JsonValue::make_number(1e300), false), value, error),
+      error);
+  SELFCHECK_CHECK_NEAR(1e300, value.get_number_or(0.0), 1e290);
+}
+
 SELFCHECK_TEST(writing_an_integer_is_exact_up_to_two_to_the_fifty_three) {
   const long long exact = 9007199254740992LL;
   SELFCHECK_CHECK_STREQ(std::string("9007199254740992"),
@@ -335,6 +414,112 @@ SELFCHECK_TEST(writing_an_integer_is_exact_up_to_two_to_the_fifty_three) {
   SELFCHECK_CHECK_STREQ(
       std::string("1e+15"),
       jsonlens::to_json_text(jsonlens::JsonValue::make_integer(1000000000000000LL)));
+}
+
+/* A read that fails says so and leaves the variable it was given alone, so that a
+   caller cannot act on the default of a failed read without noticing. The reads
+   with a fallback are the same rule with the fallback written down. */
+SELFCHECK_TEST(a_scalar_read_of_another_kind_fails_and_leaves_the_output_alone) {
+  const jsonlens::JsonValue number = jsonlens::JsonValue::make_number(1.5);
+  const jsonlens::JsonValue integer = jsonlens::JsonValue::make_integer(7);
+  const jsonlens::JsonValue text = jsonlens::JsonValue::make_string("x");
+  const jsonlens::JsonValue flag = jsonlens::JsonValue::make_bool(true);
+  const jsonlens::JsonValue none = jsonlens::JsonValue::make_null();
+
+  bool boolean = true;
+  SELFCHECK_CHECK(!number.as_bool(boolean));
+  SELFCHECK_CHECK(!text.as_bool(boolean));
+  SELFCHECK_CHECK(!none.as_bool(boolean));
+  SELFCHECK_CHECK_EQ(true, boolean);
+
+  long long whole = 42;
+  SELFCHECK_CHECK(!number.as_integer(whole));
+  SELFCHECK_CHECK(!text.as_integer(whole));
+  SELFCHECK_CHECK(!flag.as_integer(whole));
+  SELFCHECK_CHECK_EQ(static_cast<long long>(42), whole);
+
+  double real = 0.25;
+  SELFCHECK_CHECK(!text.as_number(real));
+  SELFCHECK_CHECK(!flag.as_number(real));
+  SELFCHECK_CHECK(!none.as_number(real));
+  SELFCHECK_CHECK_NEAR(0.25, real, 1e-12);
+
+  std::string token = "before";
+  SELFCHECK_CHECK(!integer.as_string(token));
+  SELFCHECK_CHECK(!flag.as_string(token));
+  SELFCHECK_CHECK(!none.as_string(token));
+  SELFCHECK_CHECK_STREQ(std::string("before"), token);
+
+  /* An integer reads as a number, because that cannot lose anything; a number
+     reads as an integer only when it was written as one. */
+  SELFCHECK_CHECK(integer.as_number(real));
+  SELFCHECK_CHECK_NEAR(7.0, real, 1e-12);
+  SELFCHECK_CHECK(integer.as_integer(whole));
+  SELFCHECK_CHECK_EQ(static_cast<long long>(7), whole);
+}
+
+SELFCHECK_TEST(a_scalar_read_with_a_fallback_takes_it_for_every_other_kind) {
+  const jsonlens::JsonValue flag = jsonlens::JsonValue::make_bool(false);
+  const jsonlens::JsonValue integer = jsonlens::JsonValue::make_integer(0);
+  const jsonlens::JsonValue number = jsonlens::JsonValue::make_number(0.0);
+  const jsonlens::JsonValue text = jsonlens::JsonValue::make_string("");
+  const jsonlens::JsonValue none = jsonlens::JsonValue::make_null();
+
+  /* The value that is there wins over the fallback, even when it is zero and
+     false, which a check for truthiness would get wrong. */
+  SELFCHECK_CHECK(!flag.get_bool_or(true));
+  SELFCHECK_CHECK_EQ(static_cast<long long>(0), integer.get_integer_or(9));
+  SELFCHECK_CHECK_NEAR(0.0, number.get_number_or(0.5), 1e-12);
+  SELFCHECK_CHECK_STREQ(std::string(""), text.get_string_or("fallback"));
+
+  /* Every other kind takes the fallback. */
+  SELFCHECK_CHECK(none.get_bool_or(true));
+  SELFCHECK_CHECK(!integer.get_bool_or(false));
+  SELFCHECK_CHECK_EQ(static_cast<long long>(9), none.get_integer_or(9));
+  SELFCHECK_CHECK_EQ(static_cast<long long>(9), text.get_integer_or(9));
+  SELFCHECK_CHECK_NEAR(0.5, none.get_number_or(0.5), 1e-12);
+  SELFCHECK_CHECK_NEAR(0.5, text.get_number_or(0.5), 1e-12);
+  SELFCHECK_CHECK_STREQ(std::string("fallback"), none.get_string_or("fallback"));
+  SELFCHECK_CHECK_STREQ(std::string("fallback"), integer.get_string_or("fallback"));
+}
+
+/* add() and try_add() agree on what they accept, and neither changes a value of
+   another kind: a write addressed at a container that cannot hold it is a silent
+   no-op for the one and a false for the other. */
+SELFCHECK_TEST(a_plain_add_ignores_a_container_that_cannot_hold_the_value) {
+  jsonlens::JsonValue scalar = jsonlens::JsonValue::make_string("text");
+  scalar.add(jsonlens::JsonValue::make_integer(1));
+  scalar.add("key", jsonlens::JsonValue::make_integer(2));
+  SELFCHECK_CHECK_STREQ(std::string("\"text\""), jsonlens::to_json_text(scalar, false));
+
+  jsonlens::JsonValue array = jsonlens::JsonValue::make_array();
+  array.add("key", jsonlens::JsonValue::make_integer(2));
+  SELFCHECK_CHECK(array.empty());
+
+  jsonlens::JsonValue object = jsonlens::JsonValue::make_object();
+  object.add(jsonlens::JsonValue::make_integer(1));
+  SELFCHECK_CHECK(object.empty());
+  object.add("a", jsonlens::JsonValue::make_integer(1));
+  object.add("a", jsonlens::JsonValue::make_integer(2));
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), object.size());
+  SELFCHECK_CHECK_EQ(static_cast<long long>(2), object.member("a")->get_integer_or(0));
+}
+
+/* The keys of an object are reported in document order, and an object that has
+   none reports none rather than a key of a default. */
+SELFCHECK_TEST(keys_of_an_object_keep_the_order_of_the_document) {
+  jsonlens::JsonValue object;
+  std::string error;
+  SELFCHECK_CHECK_MSG(
+      jsonlens::parse_json_text("{\"zulu\":1,\"alpha\":2,\"mike\":3}", object, error), error);
+  const std::vector<std::string> keys = object.keys();
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(3), keys.size());
+  SELFCHECK_CHECK(keys.size() == 3 && keys[0] == "zulu");
+  SELFCHECK_CHECK(keys.size() == 3 && keys[1] == "alpha");
+  SELFCHECK_CHECK(keys.size() == 3 && keys[2] == "mike");
+  SELFCHECK_CHECK(jsonlens::JsonValue::make_object().keys().empty());
+  SELFCHECK_CHECK(jsonlens::JsonValue::make_array().keys().empty());
+  SELFCHECK_CHECK(jsonlens::JsonValue::make_null().keys().empty());
 }
 
 SELFCHECK_TEST(a_document_survives_a_round_trip_through_text) {
@@ -409,6 +594,99 @@ SELFCHECK_TEST(a_byte_sequence_that_is_not_utf8_is_rejected) {
   std::string error;
   SELFCHECK_CHECK(!jsonlens::parse_json_text("\xc3\xa9", value, error));
   SELFCHECK_CHECK_CONTAINS(error, "not valid JSON");
+}
+
+/* The sequences that are valid sit right next to the ones that are not: the
+   smallest form of every length, and the code points at the edge of each block.
+   A scanner that only ever saw the invalid side would pass the test above and
+   still refuse half of the world. */
+SELFCHECK_TEST(the_boundaries_of_valid_utf8_are_accepted) {
+  const char *const cases[] = {"\"\xc2\x80\"",          /* U+0080, the smallest two byte form */
+                               "\"\xdf\xbf\"",          /* U+07FF, the largest two byte form */
+                               "\"\xe0\xa0\x80\"",      /* U+0800, the smallest three byte form */
+                               "\"\xed\x9f\xbf\"",      /* U+D7FF, just below the surrogate block */
+                               "\"\xee\x80\x80\"",      /* U+E000, just above it */
+                               "\"\xef\xbf\xbf\"",      /* U+FFFF */
+                               "\"\xf0\x90\x80\x80\"",  /* U+10000, the smallest four byte form */
+                               "\"\xf4\x8f\xbf\xbf\""}; /* U+10FFFF, the last code point */
+  for (const char *const text : cases) {
+    jsonlens::JsonValue value;
+    std::string error;
+    SELFCHECK_CHECK_MSG(jsonlens::parse_json_text(text, value, error), std::string(text));
+    /* What was read is written back unchanged, which is the promise that makes
+       the check worth making. */
+    SELFCHECK_CHECK_STREQ(std::string(text), jsonlens::to_json_text(value, false));
+  }
+}
+
+/* The same edges as escapes, which go through a different branch of the scanner
+   and a different encoder. */
+SELFCHECK_TEST(the_boundaries_of_a_surrogate_pair_are_accepted) {
+  const char *const cases[] = {"\"\\u007f\"",         /* the largest one byte character */
+                               "\"\\u0080\"",         /* the smallest two byte character */
+                               "\"\\u0800\"",         /* the smallest three byte character */
+                               "\"\\ud7ff\"",         /* just below the surrogates */
+                               "\"\\ue000\"",         /* just above the trailing surrogates */
+                               "\"\\ud800\\udc00\"",  /* U+10000, the first pair */
+                               "\"\\udbff\\udfff\""}; /* U+10FFFF, the last pair */
+  for (const char *const text : cases) {
+    jsonlens::JsonValue value;
+    std::string error;
+    SELFCHECK_CHECK_MSG(jsonlens::parse_json_text(text, value, error), std::string(text));
+    std::string decoded;
+    SELFCHECK_CHECK(value.as_string(decoded));
+    SELFCHECK_CHECK(!decoded.empty());
+  }
+  /* The two ends of the range spelled out, so that a broken encoder cannot pass
+     by producing the same wrong bytes for both. */
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("\"\\ud800\\udc00\"", value, error), error);
+  std::string decoded;
+  SELFCHECK_CHECK(value.as_string(decoded));
+  SELFCHECK_CHECK_STREQ(std::string("\xf0\x90\x80\x80"), decoded);
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("\"\\udbff\\udfff\"", value, error), error);
+  SELFCHECK_CHECK(value.as_string(decoded));
+  SELFCHECK_CHECK_STREQ(std::string("\xf4\x8f\xbf\xbf"), decoded);
+}
+
+/* An escape that JSON does not define is refused rather than passed through as
+   the letter that followed the backslash. */
+SELFCHECK_TEST(an_unknown_escape_is_rejected) {
+  const char *const cases[] = {"\"\\q\"", "\"\\x41\"", "\"\\'\"", "\"\\U0041\""};
+  for (const char *const text : cases) {
+    jsonlens::JsonValue value;
+    std::string error;
+    SELFCHECK_CHECK_MSG(!jsonlens::parse_json_text(text, value, error), std::string(text));
+    SELFCHECK_CHECK_CONTAINS(error, std::string("unknown escape"));
+  }
+  /* The one escape JSON does not require and this library accepts all the same,
+     because the reference grammar has it. */
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK_MSG(jsonlens::parse_json_text("\"\\/\"", value, error), error);
+  std::string decoded;
+  SELFCHECK_CHECK(value.as_string(decoded));
+  SELFCHECK_CHECK_STREQ(std::string("/"), decoded);
+}
+
+/* A \u escape that is cut short, by the end of the text or by a byte that is not
+   a hexadecimal digit, is a failure of its own and not a surrogate problem. */
+SELFCHECK_TEST(a_u_escape_without_four_digits_is_rejected) {
+  const char *const cases[] = {"\"\\u\"",     "\"\\u1\"",       "\"\\u12\"",      "\"\\u123\"",
+                               "\"\\u12g4\"", "\"\\ud800\\u\"", "\"\\ud800\\u4\""};
+  for (const char *const text : cases) {
+    jsonlens::JsonValue value;
+    std::string error;
+    SELFCHECK_CHECK_MSG(!jsonlens::parse_json_text(text, value, error), std::string(text));
+    SELFCHECK_CHECK_CONTAINS(error, std::string("four hexadecimal digits"));
+  }
+  /* A leading surrogate that is followed by something that is not an escape at
+     all is reported as the half pair it is. */
+  jsonlens::JsonValue value;
+  std::string error;
+  SELFCHECK_CHECK(!jsonlens::parse_json_text("\"\\ud800x\"", value, error));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("surrogate"));
 }
 
 SELFCHECK_TEST(valid_utf8_survives_the_round_trip) {

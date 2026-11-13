@@ -36,11 +36,37 @@
 #include <iterator>
 #include <string>
 
+#include <sys/stat.h>
+
 namespace jsonlens {
+
+namespace detail {
+
+/* True when the path names a regular file, which is the only thing this header
+   reads. A directory can be opened for reading on some systems and then fails
+   while it is read, and libstdc++ reports that by throwing out of the stream
+   rather than by setting badbit, so the check is made before the stream is
+   opened: a failure is a false and a message on every platform. */
+inline bool is_regular_file(const std::string &path) {
+  struct stat info;
+  if (stat(path.c_str(), &info) != 0) {
+    return false;
+  }
+  /* st_mode is unsigned short on MSVC and mode_t elsewhere, so it is widened
+     before it is masked: the comparison below is with S_IFREG, which is an int. */
+  const unsigned int mode = static_cast<unsigned int>(info.st_mode);
+  return (mode & static_cast<unsigned int>(S_IFMT)) == static_cast<unsigned int>(S_IFREG);
+}
+
+} /* namespace detail */
 
 /* Read a whole file as bytes. Returns false and fills error on failure, and
    leaves text as it was, so text is the new document or the old one. */
 inline bool read_text_file(const std::string &path, std::string &text, std::string &error) {
+  if (!detail::is_regular_file(path)) {
+    error = "cannot be opened for reading";
+    return false;
+  }
   std::ifstream stream(path.c_str(), std::ios::in | std::ios::binary);
   if (!stream) {
     error = "cannot be opened for reading";
@@ -77,9 +103,17 @@ inline bool write_text_file(const std::string &path, const std::string &text, st
   if (std::rename(temporary.c_str(), path.c_str()) == 0) {
     return true;
   }
-  /* A platform that refuses to rename onto an existing file gets one retry
-     after the target has been removed. The window that opens for a reader is
-     the price of a file system that cannot replace atomically. */
+  /* A platform that refuses to rename onto an existing file gets one retry after
+     the target has been removed. The window that opens for a reader is the price
+     of a file system that cannot replace atomically. The retry is only taken when
+     the target is a regular file: std::remove() also removes a directory on a
+     POSIX system, and deleting a directory to put a file in its place is not a
+     replacement, it is a loss. */
+  if (!detail::is_regular_file(path)) {
+    std::remove(temporary.c_str());
+    error = "cannot be replaced";
+    return false;
+  }
   std::remove(path.c_str());
   if (std::rename(temporary.c_str(), path.c_str()) != 0) {
     std::remove(temporary.c_str());

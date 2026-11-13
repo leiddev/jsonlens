@@ -225,7 +225,13 @@ public:
 
   /* The same array as documents, so each item reads its fields by path the way a
      document does. This is the shape of a table of records, where every item is
-     an object with optional fields of its own. */
+     an object with optional fields of its own.
+
+     The kind of an item is not checked: an item that is not an object is wrapped
+     as it is, and a field asked of it fails on that item alone, which is what lets
+     a column that is sometimes a record and sometimes a name be read here. An
+     array of scalars, where every item has one expected kind, is what the three
+     get_*_array() reads are for, and they do refuse an item of another kind. */
   bool get_documents(const std::string &path, std::vector<JsonDocument> &items,
                      std::string &error) const;
 

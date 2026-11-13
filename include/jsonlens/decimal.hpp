@@ -18,8 +18,11 @@
 
 namespace jsonlens {
 
-/* Decimal text of an unsigned value, "0" for zero. */
-inline std::string decimal_text(std::size_t value) {
+namespace detail {
+
+/* The digit loop both conversions share. Its type is at least 64 bits wide, which
+   is what a long long needs, where std::size_t is 32 bits on a 32 bit platform. */
+inline std::string unsigned_text(unsigned long long value) {
   if (value == 0) {
     return "0";
   }
@@ -31,14 +34,23 @@ inline std::string decimal_text(std::size_t value) {
   return text;
 }
 
+} /* namespace detail */
+
+/* Decimal text of an unsigned value, "0" for zero. */
+inline std::string decimal_text(std::size_t value) {
+  return detail::unsigned_text(static_cast<unsigned long long>(value));
+}
+
 /* Decimal text of a signed value, with the minus sign when it is negative. The
    magnitude is computed in the unsigned domain so that the most negative value
-   of the type, which has no positive counterpart, is still printed correctly. */
+   of the type, which has no positive counterpart, is still printed correctly: it
+   does not fit std::size_t on a 32 bit platform, so the type here is the unsigned
+   counterpart of long long and never the width of a subscript. */
 inline std::string signed_text(long long value) {
   if (value < 0) {
-    return "-" + decimal_text(static_cast<std::size_t>(-(value + 1)) + 1);
+    return "-" + detail::unsigned_text(static_cast<unsigned long long>(-(value + 1)) + 1ULL);
   }
-  return decimal_text(static_cast<std::size_t>(value));
+  return detail::unsigned_text(static_cast<unsigned long long>(value));
 }
 
 } /* namespace jsonlens */

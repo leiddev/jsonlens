@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(jsonlens
-    VERSION 0.1.0
+    VERSION 0.1.1
     DESCRIPTION "Strict JSON reader and writer with source positions"
     HOMEPAGE_URL "https://github.com/leiddev/jsonlens"
     LANGUAGES CXX)

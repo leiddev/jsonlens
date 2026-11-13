@@ -12,8 +12,10 @@ set(jsonlens_test_sources
     main.cpp
     implementation.cpp
     json_backend_test.cpp
+    json_index_test.cpp
     json_text_test.cpp
     json_document_test.cpp
+    decimal_test.cpp
     text_file_test.cpp
     version_test.cpp)
 

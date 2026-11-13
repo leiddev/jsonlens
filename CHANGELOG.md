@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-13
+
+### Fixed
+
+- `signed_text()` printed the wrong number for any `long long` on a 32 bit
+  platform: the magnitude was carried through `std::size_t`, which is 32 bits
+  there, so `signed_text(-9223372036854775807LL - 1)` gave `-0`. It is carried
+  through `unsigned long long` now. Found by building the suite for 32 bit ARM.
+- `write_text_file()` deleted a directory that was named as its target: on a
+  POSIX system `std::remove()` removes a directory, so the retry after a failed
+  rename turned the directory into the file it held. The retry is only taken when
+  the target is a regular file.
+- `read_text_file()` on a directory threw out of the stream, because libstdc++
+  reports the failure by throwing where libc++ and MSVC set `badbit`. The path is
+  now checked before the stream is opened, so reading a directory is a `false`
+  and a message on every platform.
+
+### Changed
+
+- The message of a key that holds a NUL byte names the object the key belongs to:
+  `the key of 'outer' holds a NUL byte` instead of `the key at 'outer' holds ...`.
+
+### Tests
+
+- New cases for the parts of the API the suite did not touch at all: the path
+  syntax and its escaping, the line and column of every token, `ByteLess`,
+  `decimal_text()` and `signed_text()` including the most negative value, and the
+  token kind names.
+- New cases for the failure paths of the reads and writes: a failed `as_*` leaves
+  its output alone, every `_or` read of every kind keeps `last_error()`, each
+  array read fails and changes nothing, and a write that fails below the root
+  leaves the document whole.
+- New cases at the edges of UTF-8, for the valid sequences next to the invalid
+  ones the suite already refused.
+- `get_documents()` taking an item of any kind is now pinned as the documented
+  behaviour it is.
+
 ## [0.1.0] - 2026-11-06
 
 First public release, extracted from the JSON subsystem of an internal C++

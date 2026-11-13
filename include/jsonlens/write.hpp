@@ -43,6 +43,10 @@ namespace detail {
    pointer and fills error when the value cannot be written, and the path says
    which one. The caller owns the node. */
 inline cJSON *to_cjson(const JsonValue &value, const std::string &path, std::string &error) {
+  /* How a value is named in a message. The document itself is "the document", and
+     everything else is its path in quotes: "device.port" for a member, and "[1]"
+     for an item of a root array, which is a path a caller can hand to a read
+     without adding the document in front of it. */
   const std::string where = path.empty() ? std::string("the document") : "'" + path + "'";
   switch (value.kind()) {
   case JsonKind::null_value:
@@ -100,7 +104,9 @@ inline cJSON *to_cjson(const JsonValue &value, const std::string &path, std::str
          before the member is written, so a NUL here would truncate the key and
          not the member. */
       if (keys[index].find('\0') != std::string::npos) {
-        error = "the key at " + where + " holds a NUL byte, which the backend cannot write";
+        error =
+            (path.empty() ? std::string("the key at the document") : "the key of '" + path + "'") +
+            " holds a NUL byte, which the backend cannot write";
         return 0;
       }
       const JsonValue *const item = value.member(keys[index]);
