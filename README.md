@@ -368,9 +368,15 @@ ctest --test-dir build --output-on-failure
 ```
 
 The suite is self-checking and has no test framework dependency. It covers the
-value model, the scanner, the backend's exact output, the document layer, the
-file helpers, the version macros, and the self-containment of every public
+value model, the scanner and its path syntax, the positions and kinds of every
+token, the backend's exact output, the document layer, the file helpers, the
+decimal formatting, the version macros, and the self-containment of every public
 header (each one is compiled alone).
+
+The vendored backend is pinned, so the suite tests what this library adds on top
+of it and not the backend itself: the strictness of the scanner, the kind of a
+value, the order of the keys, the shape of a diagnostic, and what a read or a
+write leaves alone when it fails.
 
 The install rules are exercised separately by `tests/consumer`, a project that
 only sees an installed tree:

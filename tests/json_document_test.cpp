@@ -264,6 +264,122 @@ SELFCHECK_TEST(a_write_refuses_to_go_through_a_value_that_cannot_hold_the_path) 
   SELFCHECK_CHECK_STREQ(std::string("the document: expected an object, found an integer"), error);
 }
 
+/* The step that is created is chosen by the step that comes next, at every depth
+   of a path that starts from nothing: a key needs an object, a subscript needs an
+   array, and the two can alternate. */
+SELFCHECK_TEST(a_write_creates_the_step_that_the_next_one_needs) {
+  jsonlens::JsonDocument document;
+  std::string error;
+  SELFCHECK_CHECK_MSG(document.set("a[0].b", jsonlens::JsonValue::make_integer(1), error), error);
+  SELFCHECK_CHECK_STREQ(std::string("{\"a\":[{\"b\":1}]}"), document.to_text(false));
+
+  /* Two subscripts in a row: the step that is created is an array because the
+     next step is a subscript, and the one below it follows the same rule. The
+     walk can only append, so the first item of a fresh array is [0] and never a
+     position further on. */
+  jsonlens::JsonDocument deeper;
+  SELFCHECK_CHECK_MSG(deeper.set("a[0][0].c", jsonlens::JsonValue::make_integer(2), error), error);
+  SELFCHECK_CHECK_STREQ(std::string("{\"a\":[[{\"c\":2}]]}"), deeper.to_text(false));
+  /* A position past the end of the array that was just created is still out of
+     range, which is what keeps a write from padding a document with values
+     nobody asked for. */
+  jsonlens::JsonDocument refused;
+  SELFCHECK_CHECK(!refused.set("a[0][1].c", jsonlens::JsonValue::make_integer(2), error));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("out of range"));
+
+  jsonlens::JsonDocument object_then_index;
+  SELFCHECK_CHECK_MSG(object_then_index.set("a.b[0]", jsonlens::JsonValue::make_string("x"), error),
+                      error);
+  SELFCHECK_CHECK_STREQ(std::string("{\"a\":{\"b\":[\"x\"]}}"), object_then_index.to_text(false));
+}
+
+/* A position past the end of an array is a failure whatever the array holds, and
+   the count in the message is what the caller needs to see why. */
+SELFCHECK_TEST(a_write_past_the_end_of_an_array_is_out_of_range) {
+  jsonlens::JsonDocument empty;
+  std::string error;
+  SELFCHECK_CHECK(!empty.set("a[5]", jsonlens::JsonValue::make_integer(1), error));
+  SELFCHECK_CHECK_STREQ(std::string("a: the array holds 0 item(s), so a[5] is out of range"),
+                        error);
+  SELFCHECK_CHECK_STREQ(std::string("{}"), empty.to_text(false));
+
+  /* The same at the end of a longer path, where the array is not the root of the
+     walk. */
+  jsonlens::JsonDocument document = loaded("{\"pads\":[{\"name\":\"in\"}]}");
+  SELFCHECK_CHECK(!document.set("pads[2].name", jsonlens::JsonValue::make_string("out"), error));
+  SELFCHECK_CHECK_STREQ(std::string("pads: the array holds 1 item(s), so pads[2] is out of range"),
+                        error);
+  SELFCHECK_CHECK_STREQ(std::string("{\"pads\":[{\"name\":\"in\"}]}"), document.to_text(false));
+  /* One past the end appends, which is the boundary the rule above is measured
+     against. */
+  SELFCHECK_CHECK_MSG(document.set("pads[1].name", jsonlens::JsonValue::make_string("out"), error),
+                      error);
+  SELFCHECK_CHECK_STREQ(std::string("{\"pads\":[{\"name\":\"in\"},{\"name\":\"out\"}]}"),
+                        document.to_text(false));
+}
+
+/* A write that fails at a level below the root leaves the document exactly as it
+   was, including the copies of the containers the walk already made: nothing is
+   put back by halves. */
+SELFCHECK_TEST(a_write_that_fails_deep_inside_changes_nothing) {
+  const std::string before = "{\"a\":{\"b\":5},\"c\":[{\"d\":1}]}";
+  jsonlens::JsonDocument document = loaded(before);
+  std::string error;
+  SELFCHECK_CHECK(!document.set("a.b.c", jsonlens::JsonValue::make_integer(1), error));
+  SELFCHECK_CHECK_STREQ(std::string("a.b: expected an object, found an integer"), error);
+  SELFCHECK_CHECK_STREQ(before, document.to_text(false));
+
+  SELFCHECK_CHECK(!document.set("c[0].d.e", jsonlens::JsonValue::make_integer(1), error));
+  SELFCHECK_CHECK_STREQ(std::string("c[0].d: expected an object, found an integer"), error);
+  SELFCHECK_CHECK_STREQ(before, document.to_text(false));
+
+  /* A null in the middle is replaced by what the next step needs, even when that
+     step is a subscript. The array that replaces it starts empty, so only [0]
+     can be written into it in one call. */
+  jsonlens::JsonDocument with_nulls = loaded("{\"a\":null,\"b\":null}");
+  SELFCHECK_CHECK_MSG(with_nulls.set("a[0].b", jsonlens::JsonValue::make_integer(2), error), error);
+  SELFCHECK_CHECK_STREQ(std::string("{\"a\":[{\"b\":2}],\"b\":null}"), with_nulls.to_text(false));
+  /* A null under a subscript is replaced the same way, and the rest of the
+     document is untouched. */
+  jsonlens::JsonDocument under_index = loaded("{\"a\":[null,{\"c\":3}]}");
+  SELFCHECK_CHECK_MSG(under_index.set("a[0].b", jsonlens::JsonValue::make_integer(4), error),
+                      error);
+  SELFCHECK_CHECK_STREQ(std::string("{\"a\":[{\"b\":4},{\"c\":3}]}"), under_index.to_text(false));
+}
+
+/* Every read clears the reason of the one before it, including a read that fails,
+   so last_error() is never the reason of something else. */
+SELFCHECK_TEST(a_failed_read_keeps_its_own_reason_and_a_read_clears_it) {
+  const jsonlens::JsonDocument document = loaded(sample_text);
+  std::string error;
+  long long port = 0;
+  SELFCHECK_CHECK(!document.get_integer("device.missing", port, error));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("device.missing"));
+
+  /* Another failure replaces the reason rather than adding to it. */
+  std::string name;
+  SELFCHECK_CHECK(!document.get_string("device.port", name, error));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("expected a string"));
+  SELFCHECK_CHECK(document.last_error().find("missing") == std::string::npos);
+
+  /* A success clears it, including a read that copies the whole document. */
+  SELFCHECK_CHECK_MSG(document.get_integer("device.port", port, error), error);
+  SELFCHECK_CHECK(document.last_error().empty());
+  jsonlens::JsonValue device;
+  SELFCHECK_CHECK_MSG(document.get_value("device", device, error), error);
+  SELFCHECK_CHECK(document.last_error().empty());
+
+  /* has() and find() are lookups and not reads: they leave the reason alone,
+     because a caller that probes for an optional key must not lose the reason of
+     the read that fell back before it. */
+  SELFCHECK_CHECK(!document.get_integer("device.missing", port, error));
+  SELFCHECK_CHECK(!document.last_error().empty());
+  SELFCHECK_CHECK(document.has("device.port"));
+  SELFCHECK_CHECK(!document.last_error().empty());
+  SELFCHECK_CHECK(document.find("device.missing") == 0);
+  SELFCHECK_CHECK(!document.last_error().empty());
+}
+
 SELFCHECK_TEST(a_write_replaces_a_null_in_the_middle) {
   jsonlens::JsonDocument document = loaded("{\"a\":null,\"b\":null,\"c\":9}");
   std::string error;
@@ -359,6 +475,162 @@ SELFCHECK_TEST(an_array_reads_as_items_including_the_root) {
   SELFCHECK_CHECK_MSG(table.get_documents("/", entries, error), error);
   SELFCHECK_CHECK_EQ(static_cast<std::size_t>(2), entries.size());
   SELFCHECK_CHECK_STREQ(std::string("a"), entries[0].get_string_or("/name", ""));
+}
+
+/* An array read fails for the three reasons any read fails - no such path, a
+   value of another kind, an invalid path - and it leaves the vector it was given
+   alone, so a caller cannot take a half filled list for a table. */
+SELFCHECK_TEST(an_array_read_fails_and_leaves_the_items_alone) {
+  const jsonlens::JsonDocument document = loaded(sample_text);
+  std::string error;
+
+  std::vector<jsonlens::JsonValue> items(1, jsonlens::JsonValue::make_string("before"));
+  SELFCHECK_CHECK(!document.get_array("device.missing", items, error));
+  SELFCHECK_CHECK_STREQ(std::string("device.missing: there is no value at this path"), error);
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), items.size());
+  SELFCHECK_CHECK(items.size() == 1 && items[0].is_string());
+
+  SELFCHECK_CHECK(!document.get_array("device", items, error));
+  SELFCHECK_CHECK_STREQ(std::string("device: expected an array, found an object"), error);
+  SELFCHECK_CHECK(!document.get_array("device.port", items, error));
+  SELFCHECK_CHECK_STREQ(std::string("device.port: expected an array, found an integer"), error);
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), items.size());
+
+  SELFCHECK_CHECK(!document.get_array("pads[", items, error));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("the path is not valid"));
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), items.size());
+
+  const jsonlens::JsonDocument with_empty = loaded("{\"a\":[]}");
+  SELFCHECK_CHECK_MSG(with_empty.get_array("a", items, error), error);
+  SELFCHECK_CHECK(items.empty());
+}
+
+/* An array of scalars fails on the first item that has another kind, names it and
+   keeps what the caller had, the same rule for a number and for a string as for
+   an integer. */
+SELFCHECK_TEST(an_array_of_numbers_or_strings_fails_on_a_wrong_item) {
+  const jsonlens::JsonDocument document =
+      loaded("{\"scales\":[0.5,\"half\"],\"names\":[\"a\",1],\"ints\":[],\"mixed\":[1,2.5]}");
+  std::string error;
+
+  std::vector<double> scales(1, 42.0);
+  const bool scales_ok = document.get_number_array("scales", scales, error);
+  SELFCHECK_CHECK(!scales_ok);
+  if (!scales_ok) {
+    SELFCHECK_CHECK_STREQ(std::string("scales[1]: expected a number, found a string"), error);
+    SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("scales[1]"));
+    SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), scales.size());
+    SELFCHECK_CHECK_NEAR(42.0, scales[0], 1e-12);
+  }
+
+  std::vector<std::string> names(1, "before");
+  const bool names_ok = document.get_string_array("names", names, error);
+  SELFCHECK_CHECK(!names_ok);
+  if (!names_ok) {
+    SELFCHECK_CHECK_STREQ(std::string("names[1]: expected a string, found an integer"), error);
+    SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), names.size());
+    SELFCHECK_CHECK_STREQ(std::string("before"), names[0]);
+  }
+
+  /* An integer is a number, so a mixed array of both reads as numbers, and an
+     empty array reads as an empty list. */
+  std::vector<double> mixed;
+  SELFCHECK_CHECK_MSG(document.get_number_array("mixed", mixed, error), error);
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(2), mixed.size());
+  SELFCHECK_CHECK_NEAR(2.5, mixed[1], 1e-12);
+  std::vector<long long> ints(1, 7);
+  SELFCHECK_CHECK_MSG(document.get_int_array("ints", ints, error), error);
+  SELFCHECK_CHECK(ints.empty());
+  SELFCHECK_CHECK(document.last_error().empty());
+}
+
+/* An array of documents is not checked for its shape: an item of any kind is
+   wrapped as it is, and a field of it fails on that item alone, where the scalar
+   arrays above, which do expect a kind, refuse such an array. This is what makes a
+   table that is sometimes a name and sometimes a record readable. */
+SELFCHECK_TEST(an_array_of_documents_takes_whatever_kind_an_item_is) {
+  const jsonlens::JsonDocument document =
+      loaded("{\"items\":[{\"name\":\"a\"},1,\"x\",null,[],true]}");
+  std::vector<jsonlens::JsonDocument> items;
+  std::string error;
+
+  SELFCHECK_CHECK_MSG(document.get_documents("items", items, error), error);
+  SELFCHECK_CHECK_STREQ(std::string(""), error);
+  SELFCHECK_CHECK(document.last_error().empty());
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(6), items.size());
+  if (items.size() != 6) {
+    return;
+  }
+  SELFCHECK_CHECK(items[0].root().is_object());
+  SELFCHECK_CHECK(items[1].root().is_integer());
+  SELFCHECK_CHECK(items[2].root().is_string());
+  SELFCHECK_CHECK(items[3].root().is_null());
+  SELFCHECK_CHECK(items[4].root().is_array());
+  SELFCHECK_CHECK(items[5].root().is_bool());
+
+  /* The item that is an object reads its field by path like any document, and an
+     item that is not reads the failure of that one item and nothing more. */
+  std::string name;
+  SELFCHECK_CHECK_MSG(items[0].get_string("name", name, error), error);
+  SELFCHECK_CHECK_STREQ(std::string("a"), name);
+  SELFCHECK_CHECK(!items[1].get_string("name", name, error));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("there is no value at this path"));
+  /* A scalar item reads a member of itself by the empty path. */
+  long long whole = 0;
+  SELFCHECK_CHECK_MSG(items[1].get_integer("", whole, error), error);
+  SELFCHECK_CHECK_EQ(static_cast<long long>(1), whole);
+
+  /* The same three failures as any other array read. */
+  std::vector<jsonlens::JsonDocument> kept(
+      1, jsonlens::JsonDocument::of(jsonlens::JsonValue::make_string("before")));
+  SELFCHECK_CHECK(!document.get_documents("items[2]", kept, error));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("expected an array"));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("found a string"));
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), kept.size());
+  SELFCHECK_CHECK(!document.get_documents("items[0].missing", kept, error));
+  SELFCHECK_CHECK_CONTAINS(error, std::string("there is no value at this path"));
+  SELFCHECK_CHECK_EQ(static_cast<std::size_t>(1), kept.size());
+
+  const jsonlens::JsonDocument empty = loaded("{\"items\":[]}");
+  SELFCHECK_CHECK_MSG(empty.get_documents("items", items, error), error);
+  SELFCHECK_CHECK(items.empty());
+}
+
+/* Every read with a default keeps the reason it fell back, which is the whole
+   point of the separate name: a caller that reports its defaults can tell a
+   missing key from a key of another kind. */
+SELFCHECK_TEST(every_read_with_a_default_keeps_its_reason) {
+  const jsonlens::JsonDocument document = loaded("{\"flag\":true,\"count\":3,\"scale\":0.5}");
+  SELFCHECK_CHECK(document.get_bool_or("flag", false));
+  SELFCHECK_CHECK(document.last_error().empty());
+  SELFCHECK_CHECK_EQ(static_cast<long long>(3), document.get_integer_or("count", 9));
+  SELFCHECK_CHECK(document.last_error().empty());
+  SELFCHECK_CHECK_NEAR(0.5, document.get_number_or("scale", 9.0), 1e-12);
+  SELFCHECK_CHECK(document.last_error().empty());
+
+  /* Missing: the fallback, and the reason names the path. */
+  SELFCHECK_CHECK(document.get_bool_or("missing", true));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("missing"));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("no value at this path"));
+  SELFCHECK_CHECK_EQ(static_cast<long long>(9), document.get_integer_or("missing", 9));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("no value at this path"));
+  SELFCHECK_CHECK_NEAR(9.0, document.get_number_or("missing", 9.0), 1e-12);
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("no value at this path"));
+
+  /* Another kind: the fallback, and the reason names both kinds. */
+  SELFCHECK_CHECK(document.get_bool_or("count", true));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("expected a boolean"));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("found an integer"));
+  SELFCHECK_CHECK_EQ(static_cast<long long>(9), document.get_integer_or("scale", 9));
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("expected an integer"));
+  SELFCHECK_CHECK_NEAR(9.0, document.get_number_or("flag", 9.0), 1e-12);
+  SELFCHECK_CHECK_CONTAINS(document.last_error(), std::string("expected a number"));
+
+  /* A read that succeeds clears the reason of the one before it. */
+  SELFCHECK_CHECK_EQ(static_cast<long long>(3), document.get_integer_or("count", 9));
+  SELFCHECK_CHECK(document.last_error().empty());
+  SELFCHECK_CHECK(document.get_string_or("count", "fallback") == "fallback");
+  SELFCHECK_CHECK(!document.last_error().empty());
 }
 
 SELFCHECK_TEST(an_array_of_scalars_reads_one_item_at_a_time) {
