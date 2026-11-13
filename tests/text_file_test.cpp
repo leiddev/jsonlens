@@ -16,7 +16,13 @@
 #include <jsonlens/jsonlens.hpp>
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
+
+#if defined(_WIN32)
+#include <direct.h>
+#endif
+#include <sys/stat.h>
 
 #include "framework/selfcheck.hpp"
 
@@ -35,6 +41,27 @@ bool file_exists(const std::string &path) {
   std::string text;
   std::string error;
   return jsonlens::read_text_file(path, text, error);
+}
+
+/* make_directory() has two names and two spellings of its result, so the two are
+   put behind one call that the cases read the same way on both systems. */
+int make_directory(const std::string &path) {
+#if defined(_WIN32)
+  return _mkdir(path.c_str());
+#else
+  return mkdir(path.c_str(), 0777);
+#endif
+}
+
+/* True when the path exists and is a directory, whatever is inside it: the point
+   of the case that uses it is that the directory was not replaced by a file. */
+bool directory_exists(const std::string &path) {
+  struct stat info;
+  if (stat(path.c_str(), &info) != 0) {
+    return false;
+  }
+  const unsigned int mode = static_cast<unsigned int>(info.st_mode);
+  return (mode & static_cast<unsigned int>(S_IFMT)) == static_cast<unsigned int>(S_IFDIR);
 }
 
 } /* namespace */
@@ -122,12 +149,28 @@ SELFCHECK_TEST(a_directory_is_not_a_file_to_read) {
 /* Writing over a directory is a failure as well, and the message is the one of the
    step that failed: the write reaches its rename, because the temporary file can be
    created next to the directory, and a rename onto a directory is what is refused.
-   The document that was there is still there, and the temporary file is gone. */
+   The directory is still there afterwards and the temporary file is gone.
+
+   The target is a directory of its own and not JSONLENS_TESTS_DIR, because a write
+   that wrongly went through would then replace the directory every other test
+   writes into, and one broken case would fail all of them. */
 SELFCHECK_TEST(a_directory_is_not_a_file_to_write) {
+  const std::string directory = path_in("a_directory");
+  const int created = make_directory(directory);
+  SELFCHECK_CHECK_EQ(0, created);
+
   std::string error;
-  SELFCHECK_CHECK(!jsonlens::write_text_file(JSONLENS_TESTS_DIR, "{}", error));
-  SELFCHECK_CHECK_STREQ(std::string("cannot be replaced"), error);
-  SELFCHECK_CHECK(!file_exists(std::string(JSONLENS_TESTS_DIR) + ".jsonlens-tmp"));
+  const bool written = jsonlens::write_text_file(directory, "{}", error);
+  SELFCHECK_CHECK(!written);
+  if (!written) {
+    SELFCHECK_CHECK_STREQ(std::string("cannot be replaced"), error);
+  }
+  /* The directory itself survived, which is the part that matters: a POSIX
+     std::remove() deletes a directory, so a retry that removed the target before
+     the second rename would have turned it into a file. */
+  SELFCHECK_CHECK(directory_exists(directory));
+  SELFCHECK_CHECK(!file_exists(directory + ".jsonlens-tmp"));
+  std::remove(directory.c_str());
 }
 
 /* A write that cannot go through leaves the previous document whole and takes its

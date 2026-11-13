@@ -103,9 +103,17 @@ inline bool write_text_file(const std::string &path, const std::string &text, st
   if (std::rename(temporary.c_str(), path.c_str()) == 0) {
     return true;
   }
-  /* A platform that refuses to rename onto an existing file gets one retry
-     after the target has been removed. The window that opens for a reader is
-     the price of a file system that cannot replace atomically. */
+  /* A platform that refuses to rename onto an existing file gets one retry after
+     the target has been removed. The window that opens for a reader is the price
+     of a file system that cannot replace atomically. The retry is only taken when
+     the target is a regular file: std::remove() also removes a directory on a
+     POSIX system, and deleting a directory to put a file in its place is not a
+     replacement, it is a loss. */
+  if (!detail::is_regular_file(path)) {
+    std::remove(temporary.c_str());
+    error = "cannot be replaced";
+    return false;
+  }
   std::remove(path.c_str());
   if (std::rename(temporary.c_str(), path.c_str()) != 0) {
     std::remove(temporary.c_str());

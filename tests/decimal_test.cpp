@@ -30,10 +30,13 @@ SELFCHECK_TEST(decimal_text_writes_an_unsigned_value) {
      entered with two or three characters. */
   SELFCHECK_CHECK_STREQ(std::string("999"), jsonlens::decimal_text(999));
   SELFCHECK_CHECK_STREQ(std::string("1000"), jsonlens::decimal_text(1000));
-  /* The largest value of the type has nothing to overflow into. */
-  SELFCHECK_CHECK_STREQ(
-      std::string("18446744073709551615"),
-      jsonlens::decimal_text(static_cast<std::size_t>(~static_cast<std::size_t>(0))));
+  /* The largest value of std::size_t, which is not the same number on a 32 bit
+     platform as on a 64 bit one: the loop is written for whatever width the type
+     has, and this is what says so. */
+  const std::size_t largest = ~static_cast<std::size_t>(0);
+  SELFCHECK_CHECK_STREQ(sizeof(std::size_t) == 8 ? std::string("18446744073709551615")
+                                                 : std::string("4294967295"),
+                        jsonlens::decimal_text(largest));
 }
 
 SELFCHECK_TEST(signed_text_writes_a_minus_sign_and_the_magnitude) {
